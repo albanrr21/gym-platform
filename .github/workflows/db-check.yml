@@ -1,0 +1,28 @@
+name: DB Migration Check
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+
+jobs:
+  migration-check:
+    name: Validate Migrations
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: "latest"
+
+      - name: Start Supabase Local
+        run: supabase start
+
+      - name: Run Migrations
+        run: supabase db reset
+
+      - name: Check for schema drift
+        run: supabase db diff --schema public

@@ -1,0 +1,6 @@
+{
+  "explorer.fileNesting.enabled": false,
+  "files.exclude": {
+    "**/.git": false
+  }
+}
