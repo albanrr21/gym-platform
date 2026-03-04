@@ -9,12 +9,8 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {
-      "output": []
-    },
-    "type-check": {
-      "outputs": []
-    },
+    "lint": {},
+    "type-check": {},
     "test": {
       "outputs": ["coverage/**"]
     }
