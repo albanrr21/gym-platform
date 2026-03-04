@@ -13,7 +13,7 @@ export default function Home() {
           </p>
         </div>
         <div className="relative mt-10 w-full rounded-xl border bg-gray-100 p-6 shadow-lg dark:bg-gray-800">
-          <Image
+          <img
             src="https://linkspaces.co.uk/wp-content/uploads/2024/05/gb-botanica-gym-link-spaces-slough.jpg"
             alt="Gym Image"
             width={800}
