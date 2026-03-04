@@ -14,18 +14,21 @@ jobs:
 
       - uses: pnpm/action-setup@v3
         with:
-          version: 9
+          version: 10
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: "pnpm"
+          cache-dependency-path: apps/web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        working-directory: apps/web
 
       - name: Build
         run: pnpm build
+        working-directory: apps/web
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
@@ -37,3 +40,4 @@ jobs:
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
           vercel-args: "--prod"
+          working-directory: apps/web
