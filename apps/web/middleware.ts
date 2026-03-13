@@ -1,27 +1,27 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
+import { updateSession } from "@/lib/supabase/middleware";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const hostname = request.headers.get("host") || "";
-  const rootDomain = process.env.ROOT_DOMAIN || "alban-rrahmani.me";
+  const isDev = hostname.includes("localhost");
 
-  const subdomain = hostname
-    .replace(`.${rootDomain}`, "")
-    .replace(`.localhost:3000`, "");
+  const subdomain = isDev
+    ? hostname.split(".localhost")[0] !== hostname
+      ? hostname.split(".localhost")[0]
+      : null
+    : hostname.split(".")[0];
+  
+  const response = await updateSession(request);
 
-  const isRootDomain =
-    hostname === rootDomain ||
-    hostname === `www.${rootDomain}` ||
-    hostname === "localhost:3000";
-
-  if (!isRootDomain && subdomain) {
-    const url = request.nextUrl.clone();
-    const response = NextResponse.rewrite(url);
+  if (subdomain && subdomain !== "www") {
     response.headers.set("x-gym-subdomain", subdomain);
-    return response;
   }
-  return NextResponse.next();
+
+  return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next.static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };
