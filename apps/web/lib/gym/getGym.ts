@@ -1,9 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { headers } from "next/headers";
+import { getSubdomainFromHost } from "@/lib/tenancy/subdomain";
 
 export async function getGym() {
   const headersList = await headers();
-  const subdomain = headersList.get("x-gym-subdomain");
+  const headerSubdomain = headersList.get("x-gym-subdomain");
+  const host =
+    headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
+  const subdomain = headerSubdomain ?? getSubdomainFromHost(host);
 
   console.log("x-gym-subdomain header:", subdomain);
 

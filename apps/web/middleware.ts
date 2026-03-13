@@ -1,21 +1,19 @@
 import { type NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { getSubdomainFromHost } from "@/lib/tenancy/subdomain";
 
 export async function middleware(request: NextRequest) {
-  const hostname = request.headers.get("host") || "";
-  const isDev = hostname.includes("localhost");
+  const host = request.headers.get("host");
+  const subdomain = getSubdomainFromHost(host);
 
-  const subdomain = isDev
-    ? hostname.split(".localhost")[0] !== hostname
-      ? hostname.split(".localhost")[0]
-      : null
-    : hostname.split(".")[0];
-  
-  const response = await updateSession(request);
+  // Ensure server components/routes can read the gym subdomain as a request header.
+  const requestHeaders = new Headers(request.headers);
+  if (subdomain) requestHeaders.set("x-gym-subdomain", subdomain);
 
-  if (subdomain && subdomain !== "www") {
-    response.headers.set("x-gym-subdomain", subdomain);
-  }
+  const response = await updateSession(request, requestHeaders);
+
+  // Useful when debugging in the browser/network tab.
+  if (subdomain) response.headers.set("x-gym-subdomain", subdomain);
 
   return response;
 }
