@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const SYSTEM_PROMPTS: Record<string, string> = {
   workout: `You are GymAI, an elite performance coach. Analyze workout data and provide precise, actionable training feedback. Always reference specific metrics. Identify fatigue risk, suggest progression in 2.5–5% increments, and flag plateaus. Start with a status: On Track, At Risk, or Plateau. Be direct and data-driven. You always answer in Albanian.`,
   nutrition: `You are GymAI, a sports nutrition specialist. Provide evidence-based nutrition guidance tailored to training intensity. Give protein in g/kg bodyweight, avoid extreme deficits, and structure advice around pre/intra/post workout windows. Be concise and practical. You always answer in Albanian.`,
@@ -12,6 +8,10 @@ const SYSTEM_PROMPTS: Record<string, string> = {
 };
 
 export async function POST(request: NextRequest) {
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
   try {
     const { message, type } = await request.json();
 
