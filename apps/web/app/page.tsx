@@ -5,7 +5,7 @@ export default async function HomePage() {
   const gym = await getGym();
 
   if (gym) {
-    redirect("/register");
+    redirect("/login");
   }
 
   return (

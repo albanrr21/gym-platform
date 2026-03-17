@@ -51,9 +51,7 @@ export default function LoginForm() {
     }
 
     if (!gymId) {
-      setError(
-        "This account is not assigned to a gym. Ask an admin to set your gym_id.",
-      );
+      setError("This account is not assigned to a gym. Ask an admin to set your gym_id.");
       setLoading(false);
       return;
     }
@@ -71,7 +69,6 @@ export default function LoginForm() {
     }
 
     const subdomain = gym?.subdomain ?? null;
-    console.log("subdomain:", subdomain);
 
     if (!subdomain) {
       setError("Gym subdomain not found for this account.");
@@ -79,22 +76,33 @@ export default function LoginForm() {
       return;
     }
 
-    const isLocal = window.location.hostname.includes("localhost");
+    const hostname = window.location.hostname;
     const port = window.location.port ? `:${window.location.port}` : "";
-    const inferredRootDomain = isLocal
-      ? `localhost${port}`
-      : window.location.hostname.split(".").slice(-2).join(".");
-    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? inferredRootDomain;
-    const protocol = rootDomain.includes("localhost") ? "http" : "https";
 
-    const baseUrl = `${protocol}://${subdomain}.${rootDomain.replace(/^https?:\/\//, "")}`;
-    const url = `${baseUrl}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
+    let baseUrl: string;
 
-    // If you're already on the right gym subdomain, avoid the cross-domain hop.
+    if (hostname === "localhost") {
+      baseUrl = `http://${subdomain}.localhost${port}`;
+    } else if (hostname.endsWith(".nip.io")) {
+      // e.g. 192.168.1.8.nip.io → elite.192.168.1.8.nip.io
+      const nipBase = hostname.split(".").slice(-5).join(".");
+      baseUrl = `http://${subdomain}.${nipBase}${port}`;
+    } else if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+      // raw IP — wrap with nip.io
+      baseUrl = `http://${subdomain}.${hostname}.nip.io${port}`;
+    } else {
+      // production
+      const rootParts = hostname.split(".").slice(-2).join(".");
+      baseUrl = `https://${subdomain}.${rootParts}`;
+    }
+
+    // If already on the correct subdomain, skip the cross-domain hop
     if (window.location.origin === baseUrl) {
       window.location.href = "/dashboard";
       return;
     }
+
+    const url = `${baseUrl}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
 
     setRedirectUrl(url);
     window.location.href = url;

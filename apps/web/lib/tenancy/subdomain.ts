@@ -29,6 +29,10 @@ export function getSubdomainFromHost(hostHeader: string | null | undefined) {
     return sub || null;
   }
 
+  if (hostname.endsWith(".nip.io")) {
+    return hostname.split(".")[0] || null;
+  }
+
   // Treat Vercel preview/prod domains as "main", unless you explicitly set ROOT_DOMAIN to them.
   if (hostname.endsWith(".vercel.app")) return null;
 
@@ -44,7 +48,10 @@ export function getSubdomainFromHost(hostHeader: string | null | undefined) {
       return sub.split(".")[0] || null;
     }
 
-    // If the host doesn't match our configured root domain, treat it as "main".
+    // If the host doesn't match our configured root domain, fall back to generic parsing.
+    // This helps when ROOT_DOMAIN is misconfigured in an environment.
+    const parts = hostname.split(".");
+    if (parts.length > 2 && parts[0] !== "www") return parts[0];
     return null;
   }
 
@@ -54,4 +61,3 @@ export function getSubdomainFromHost(hostHeader: string | null | undefined) {
 
   return null;
 }
-
