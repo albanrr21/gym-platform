@@ -19,9 +19,23 @@ export default function RegisterForm({ gymId, gymName }: Props) {
   const router = useRouter();
   const supabase = createClient();
 
+  function validate(): string | null {
+    if (!fullName.trim()) return "Full name is required.";
+    if (!email.trim()) return "Email is required.";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return "Please enter a valid email address.";
+    if (password.length < 6) return "Password must be at least 6 characters.";
+    return null;
+  }
+
   async function handleRegister() {
-    setLoading(true);
     setError("");
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setLoading(true);
 
     const { error } = await supabase.auth.signUp({
       email,

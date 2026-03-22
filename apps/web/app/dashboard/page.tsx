@@ -1,6 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
+import { LogoutButton } from "./LogoutButton";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -45,12 +46,15 @@ export default async function DashboardPage() {
               Welcome, {profile?.full_name ?? user.email}
             </h1>
           </div>
-          <Link
-            href="/dashboard/log"
-            className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-          >
-            + Log Workout
-          </Link>
+          <div className="flex items-center gap-3">
+            <LogoutButton />
+            <Link
+              href="/dashboard/log"
+              className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              + Log Workout
+            </Link>
+          </div>
         </div>
 
         {/* Recent workouts */}
