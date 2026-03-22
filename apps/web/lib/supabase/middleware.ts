@@ -37,8 +37,11 @@ export async function updateSession(
   const hostname = request.headers.get("host") || "";
   const isSubdomain = Boolean(getSubdomainFromHost(hostname));
 
-  // Only protect dashboard routes on subdomains
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  // Only protect private routes on subdomains
+  const isProtectedRoute =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/ai-demo");
+  if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

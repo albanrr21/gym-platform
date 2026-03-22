@@ -56,7 +56,21 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
-
+        {/* Quick links */}
+        <div className="flex gap-2 mb-6">
+          <Link
+            href="/dashboard/analytics"
+            className="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Progress →
+          </Link>
+          <Link
+            href="/dashboard/ai-report"
+            className="text-sm px-3 py-1.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            AI Report →
+          </Link>
+        </div>
         {/* Recent workouts */}
         <div>
           <h2 className="text-sm font-medium text-gray-500 mb-3">

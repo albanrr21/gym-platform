@@ -48,7 +48,7 @@ const emptySet = (): ExerciseSet => ({
 
 const emptyExercise = (): Exercise => ({
   name: "",
-  sets: [emptySet()],
+  sets: [emptySet(), emptySet(), emptySet()],
 });
 
 export default function LogWorkoutForm({ gymId }: { gymId: string }) {
@@ -290,7 +290,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
         {exercises.map((exercise, exIndex) => (
           <div
             key={exIndex}
-            className="bg-white border border-gray-200 rounded-xl overflow-hidden"
+            className="bg-white border border-gray-200 rounded-xl"
           >
             {/* Exercise header */}
             <div className="px-4 pt-4 pb-2">
@@ -309,7 +309,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
                   {/* Dropdown */}
                   {searchResults[exIndex]?.length > 0 && (
-                    <div className="absolute z-10 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden">
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-auto">
                       {searchResults[exIndex].map((result) => (
                         <div
                           key={result.id}
@@ -421,10 +421,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                 className={`grid grid-cols-12 gap-1 px-4 py-2 items-center border-t border-gray-50 ${set.completed ? "bg-green-50" : ""}`}
               >
                 {/* Set number */}
-                <div
-                  className="col-span-1 flex items-center justify-center cursor-pointer"
-                  onClick={() => removeSet(exIndex, setIndex)}
-                >
+                <div className="col-span-1 flex items-center justify-center">
                   <span
                     className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
                   >
@@ -474,8 +471,8 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                   />
                 </div>
 
-                {/* Complete toggle */}
-                <div className="col-span-2 flex justify-center">
+                {/* Complete toggle + remove */}
+                <div className="col-span-2 flex items-center justify-center gap-2">
                   <button
                     onClick={() => toggleSet(exIndex, setIndex)}
                     className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
@@ -492,6 +489,27 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                       strokeLinejoin="round"
                     >
                       <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => removeSet(exIndex, setIndex)}
+                    disabled={exercise.sets.length <= 1}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-red-50 text-red-400 hover:bg-red-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                    aria-label="Remove set"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                      <line x1="6" y1="18" x2="18" y2="6" />
                     </svg>
                   </button>
                 </div>
