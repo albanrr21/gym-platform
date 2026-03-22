@@ -1,7 +1,7 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
-import { LogoutButton } from "./LogoutButton";
+import LogoutButton from "./LogoutButton";
 import Link from "next/link";
 
 export default async function DashboardPage() {
