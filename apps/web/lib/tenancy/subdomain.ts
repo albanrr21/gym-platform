@@ -61,3 +61,19 @@ export function getSubdomainFromHost(hostHeader: string | null | undefined) {
 
   return null;
 }
+
+export function normalizeRootDomain(
+  rootDomain: string,
+  subdomain?: string | null,
+) {
+  let cleaned = rootDomain
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "");
+
+  if (subdomain && cleaned.startsWith(`${subdomain}.`)) {
+    cleaned = cleaned.slice(subdomain.length + 1);
+  }
+
+  return cleaned;
+}

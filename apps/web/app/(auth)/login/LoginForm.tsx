@@ -94,7 +94,7 @@ export default function LoginForm() {
 
     let baseUrl: string;
 
-    if (hostname === "localhost") {
+    if (hostname === "localhost" || hostname.endsWith(".localhost")) {
       baseUrl = `http://${subdomain}.localhost${port}`;
     } else if (hostname.endsWith(".nip.io")) {
       // e.g. 192.168.1.8.nip.io → elite.192.168.1.8.nip.io
