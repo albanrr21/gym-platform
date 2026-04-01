@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const exerciseId = searchParams.get("exerciseId");
+  const rapidApiKey = process.env.RAPIDAPI_KEY;
 
   if (!exerciseId) {
     return NextResponse.json(
@@ -10,12 +11,18 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
+  if (!rapidApiKey) {
+    return NextResponse.json(
+      { error: "RAPIDAPI_KEY is not set" },
+      { status: 500 },
+    );
+  }
 
   const res = await fetch(
     `https://exercisedb.p.rapidapi.com/image?resolution=180&exerciseId=${exerciseId}`,
     {
       headers: {
-        "X-RapidAPI-Key": process.env.RAPIDAPI_KEY!,
+        "X-RapidAPI-Key": rapidApiKey,
         "X-RapidAPI-Host": "exercisedb.p.rapidapi.com",
       },
     },
@@ -23,7 +30,7 @@ export async function GET(request: NextRequest) {
 
   if (!res.ok) {
     return NextResponse.json(
-      { error: "Failed to fetch exercise image" },
+      { error: "Failed to fetch exercise image", status: res.status },
       { status: 500 },
     );
   }

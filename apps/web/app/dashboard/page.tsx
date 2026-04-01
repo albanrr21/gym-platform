@@ -70,6 +70,12 @@ export default async function DashboardPage() {
           >
             AI Report →
           </Link>
+          <Link
+            href="/dashboard/leaderboard"
+            className="text-sm px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Leaderboard →
+          </Link>
         </div>
         {/* Recent workouts */}
         <div>

@@ -27,9 +27,15 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning={true}
       >
         <AuthProvider>{children}</AuthProvider>
       </body>
+      <script
+        src="https://ai-assistant-builder-nine.vercel.app/api/embed/d1cb9c7e-3ba4-47b9-805f-30a00b99c02e"
+        data-chatbot-id="d1cb9c7e-3ba4-47b9-805f-30a00b99c02e"
+        async
+      ></script>
     </html>
   );
 }
