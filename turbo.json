@@ -4,7 +4,12 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "dist/**"],
-      "env": ["OPENAI_API_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ROOT_DOMAIN"]
+      "env": [
+        "OPENAI_API_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "ROOT_DOMAIN",
+        "RAPIDAPI_KEY"
+      ]
     },
     "dev": {
       "cache": false,
