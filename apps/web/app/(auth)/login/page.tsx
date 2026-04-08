@@ -1,6 +1,7 @@
 import LoginForm from "./LoginForm";
 import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
+import { buildGymBaseUrl } from "@/lib/tenancy/subdomain";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -34,21 +35,16 @@ export default async function LoginPage() {
 
       if (subdomain) {
         const headersList = await headers();
-        const host = headersList.get("host") ?? "";
-        const isLocal = host.includes("localhost");
-        const port = host.includes(":") ? `:${host.split(":").pop()}` : "";
-        const inferredRootDomain = isLocal
-          ? `localhost${port}`
-          : host.split(".").slice(-2).join(".");
-        const rootDomain =
-          process.env.ROOT_DOMAIN ??
-          process.env.NEXT_PUBLIC_ROOT_DOMAIN ??
-          inferredRootDomain;
-        const protocol = rootDomain.includes("localhost") ? "http" : "https";
+        const host =
+          headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
+        const baseUrl = buildGymBaseUrl({
+          currentHost: host,
+          subdomain,
+          configuredRootDomain:
+            process.env.ROOT_DOMAIN ?? process.env.NEXT_PUBLIC_ROOT_DOMAIN,
+        });
 
-        redirect(
-          `${protocol}://${subdomain}.${rootDomain.replace(/^https?:\/\//, "")}/dashboard`,
-        );
+        redirect(`${baseUrl}/dashboard`);
       }
     }
   }

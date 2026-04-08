@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { buildGymBaseUrl } from "@/lib/tenancy/subdomain";
 import Link from "next/link";
 
 export default function LoginForm() {
@@ -11,7 +12,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const supabase = createClient();
-  
+
   function validate(): string | null {
     if (!email.trim()) return "Email is required.";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -89,24 +90,17 @@ export default function LoginForm() {
       return;
     }
 
-    const hostname = window.location.hostname;
-    const port = window.location.port ? `:${window.location.port}` : "";
-
     let baseUrl: string;
-
-    if (hostname === "localhost" || hostname.endsWith(".localhost")) {
-      baseUrl = `http://${subdomain}.localhost${port}`;
-    } else if (hostname.endsWith(".nip.io")) {
-      // e.g. 192.168.1.8.nip.io → elite.192.168.1.8.nip.io
-      const nipBase = hostname.split(".").slice(-5).join(".");
-      baseUrl = `http://${subdomain}.${nipBase}${port}`;
-    } else if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
-      // raw IP — wrap with nip.io
-      baseUrl = `http://${subdomain}.${hostname}.nip.io${port}`;
-    } else {
-      // production
-      const rootParts = hostname.split(".").slice(-2).join(".");
-      baseUrl = `https://${subdomain}.${rootParts}`;
+    try {
+      baseUrl = buildGymBaseUrl({
+        currentHost: window.location.host,
+        subdomain,
+        configuredRootDomain: process.env.NEXT_PUBLIC_ROOT_DOMAIN,
+      });
+    } catch {
+      setError("Unable to resolve your gym URL. Please contact support.");
+      setLoading(false);
+      return;
     }
 
     // If already on the correct subdomain, skip the cross-domain hop

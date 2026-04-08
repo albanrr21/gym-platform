@@ -6,9 +6,33 @@ function normalizeHost(host: string) {
     .replace(/\/.*$/, "");
 }
 
+function splitHostAndPort(host: string) {
+  const normalized = normalizeHost(host);
+  const lastColonIndex = normalized.lastIndexOf(":");
+
+  if (lastColonIndex > -1 && normalized.indexOf(":") === lastColonIndex) {
+    const maybePort = normalized.slice(lastColonIndex + 1);
+    if (/^\d+$/.test(maybePort)) {
+      return {
+        hostname: normalized.slice(0, lastColonIndex),
+        port: maybePort,
+      };
+    }
+  }
+
+  return {
+    hostname: normalized,
+    port: "",
+  };
+}
+
 function stripPort(hostname: string) {
   // `Host` can be `example.com:3000`
-  return hostname.includes(":") ? hostname.split(":")[0] : hostname;
+  return splitHostAndPort(hostname).hostname;
+}
+
+function isIpv4Address(hostname: string) {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
 }
 
 function getConfiguredRootDomain() {
@@ -69,11 +93,62 @@ export function normalizeRootDomain(
   let cleaned = rootDomain
     .trim()
     .toLowerCase()
-    .replace(/^https?:\/\//, "");
+    .replace(/^https?:\/\//, "")
+    .replace(/\/.*$/, "");
 
   if (subdomain && cleaned.startsWith(`${subdomain}.`)) {
     cleaned = cleaned.slice(subdomain.length + 1);
   }
 
-  return cleaned;
+  return stripPort(cleaned);
+}
+
+export function buildGymBaseUrl({
+  currentHost,
+  subdomain,
+  configuredRootDomain,
+}: {
+  currentHost: string;
+  subdomain: string;
+  configuredRootDomain?: string | null;
+}) {
+  const { hostname, port } = splitHostAndPort(currentHost);
+  const tenant = subdomain.trim().toLowerCase();
+  const portSuffix = port ? `:${port}` : "";
+
+  if (!hostname) {
+    throw new Error("Cannot resolve redirect host");
+  }
+
+  if (!tenant) {
+    throw new Error("Cannot resolve redirect subdomain");
+  }
+
+  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
+    return `http://${tenant}.localhost${portSuffix}`;
+  }
+
+  if (hostname.endsWith(".nip.io")) {
+    const nipBase = hostname.startsWith(`${tenant}.`)
+      ? hostname.slice(tenant.length + 1)
+      : hostname;
+    return `http://${tenant}.${nipBase}${portSuffix}`;
+  }
+
+  if (isIpv4Address(hostname)) {
+    return `http://${tenant}.${hostname}.nip.io${portSuffix}`;
+  }
+
+  const normalizedConfiguredRoot = configuredRootDomain
+    ? normalizeRootDomain(configuredRootDomain, tenant)
+    : null;
+  const inferredRoot = hostname.startsWith(`${tenant}.`)
+    ? hostname.slice(tenant.length + 1)
+    : hostname;
+  const rootDomain =
+    normalizedConfiguredRoot && normalizedConfiguredRoot.length > 0
+      ? normalizedConfiguredRoot
+      : inferredRoot;
+
+  return `https://${tenant}.${rootDomain}`;
 }
