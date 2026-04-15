@@ -1,6 +1,41 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
+function pickOne<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+type AnalyticsEmbeddedWorkout = {
+  logged_at: string | null;
+  user_id: string | null;
+};
+
+type AnalyticsEmbeddedExercise = {
+  name: string | null;
+  workout_id: string | null;
+  workouts: AnalyticsEmbeddedWorkout | AnalyticsEmbeddedWorkout[] | null;
+};
+
+type AnalyticsSetRow = {
+  weight_kg: number | null;
+  reps: number | null;
+  completed: boolean | null;
+  exercises: AnalyticsEmbeddedExercise | AnalyticsEmbeddedExercise[] | null;
+};
+
+type AnalyticsWorkoutRow = {
+  logged_at: string;
+  exercises: {
+    name: string | null;
+    sets: {
+      weight_kg: number | null;
+      reps: number | null;
+      completed: boolean | null;
+    }[];
+  }[];
+};
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -33,22 +68,26 @@ export async function GET() {
     .eq("completed", true);
 
   // Filter to only this user's sets
-  const userSets = (setsData || []).filter(
-    (s: any) => s.exercises?.workouts?.user_id === user.id,
-  );
+  const typedSets = (setsData ?? []) as AnalyticsSetRow[];
+  const userSets = typedSets.filter((s) => {
+    const exercise = pickOne<AnalyticsEmbeddedExercise>(s.exercises);
+    const workout = pickOne<AnalyticsEmbeddedWorkout>(exercise?.workouts);
+    return workout?.user_id === user.id;
+  });
 
   // Total volume (kg)
   const totalVolume = userSets.reduce(
-    (sum: number, s: any) => sum + (s.weight_kg || 0) * (s.reps || 0),
+    (sum, s) => sum + (s.weight_kg ?? 0) * (s.reps ?? 0),
     0,
   );
 
   // Volume by muscle group (exercise name as proxy)
   const volumeByExercise: Record<string, number> = {};
-  userSets.forEach((s: any) => {
-    const name = s.exercises?.name || "Unknown";
+  userSets.forEach((s) => {
+    const name =
+      pickOne<AnalyticsEmbeddedExercise>(s.exercises)?.name ?? "Unknown";
     volumeByExercise[name] =
-      (volumeByExercise[name] || 0) + (s.weight_kg || 0) * (s.reps || 0);
+      (volumeByExercise[name] || 0) + (s.weight_kg ?? 0) * (s.reps ?? 0);
   });
 
   // Top 5 exercises by volume
@@ -105,15 +144,17 @@ export async function GET() {
       .order("logged_at", { ascending: true })
       .limit(20);
 
-    (workoutsWithExercise || []).forEach((w: any) => {
+    const typedWorkouts = (workoutsWithExercise ?? []) as AnalyticsWorkoutRow[];
+
+    typedWorkouts.forEach((w) => {
       const matchingExercise = w.exercises?.find(
-        (e: any) => e.name === topExerciseName,
+        (e) => e.name === topExerciseName,
       );
       if (!matchingExercise) return;
 
       const bestSet = (matchingExercise.sets || [])
-        .filter((s: any) => s.completed)
-        .sort((a: any, b: any) => (b.weight_kg || 0) - (a.weight_kg || 0))[0];
+        .filter((s) => Boolean(s.completed))
+        .sort((a, b) => (b.weight_kg ?? 0) - (a.weight_kg ?? 0))[0];
 
       if (bestSet) {
         strengthTrend.push({
@@ -121,7 +162,7 @@ export async function GET() {
             day: "numeric",
             month: "short",
           }),
-          weight: bestSet.weight_kg,
+          weight: bestSet.weight_kg ?? 0,
         });
       }
     });
@@ -129,10 +170,12 @@ export async function GET() {
 
   // Best lifts (max weight per exercise)
   const bestLifts: Record<string, number> = {};
-  userSets.forEach((s: any) => {
-    const name = s.exercises?.name || "Unknown";
-    if (!bestLifts[name] || s.weight_kg > bestLifts[name]) {
-      bestLifts[name] = s.weight_kg;
+  userSets.forEach((s) => {
+    const name =
+      pickOne<AnalyticsEmbeddedExercise>(s.exercises)?.name ?? "Unknown";
+    const weight = s.weight_kg ?? 0;
+    if (!bestLifts[name] || weight > bestLifts[name]) {
+      bestLifts[name] = weight;
     }
   });
 

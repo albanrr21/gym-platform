@@ -22,6 +22,7 @@ export default function LoginForm() {
   }
 
   async function handleLogin() {
+    if (loading) return;
     setError("");
     const validationError = validate();
     if (validationError) {
@@ -30,89 +31,94 @@ export default function LoginForm() {
     }
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let redirecting = false;
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    const accessToken = data.session?.access_token;
-    const refreshToken = data.session?.refresh_token;
-
-    if (!accessToken || !refreshToken) {
-      setError("Login succeeded but session tokens are missing.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("users")
-      .select("gym_id")
-      .eq("id", data.user.id)
-      .single();
-
-    const gymId = profile?.gym_id ?? data.user.user_metadata?.gym_id ?? null;
-
-    if (profileError && !gymId) {
-      setError(profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!gymId) {
-      setError("This account is not assigned to a gym. Ask an admin to set your gym_id.");
-      setLoading(false);
-      return;
-    }
-
-    const { data: gym, error: gymError } = await supabase
-      .from("gyms")
-      .select("subdomain")
-      .eq("id", gymId)
-      .single();
-
-    if (gymError) {
-      setError(gymError.message);
-      setLoading(false);
-      return;
-    }
-
-    const subdomain = gym?.subdomain ?? null;
-
-    if (!subdomain) {
-      setError("Gym subdomain not found for this account.");
-      setLoading(false);
-      return;
-    }
-
-    let baseUrl: string;
     try {
-      baseUrl = buildGymBaseUrl({
-        currentHost: window.location.host,
-        subdomain,
-        configuredRootDomain: process.env.NEXT_PUBLIC_ROOT_DOMAIN,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      const accessToken = data.session?.access_token;
+      const refreshToken = data.session?.refresh_token;
+
+      if (!accessToken || !refreshToken) {
+        setError("Login succeeded but session tokens are missing.");
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from("users")
+        .select("gym_id")
+        .eq("id", data.user.id)
+        .single();
+
+      const gymId = profile?.gym_id ?? data.user.user_metadata?.gym_id ?? null;
+
+      if (profileError && !gymId) {
+        setError(profileError.message);
+        return;
+      }
+
+      if (!gymId) {
+        setError(
+          "This account is not assigned to a gym. Ask an admin to set your gym_id.",
+        );
+        return;
+      }
+
+      const { data: gym, error: gymError } = await supabase
+        .from("gyms")
+        .select("subdomain")
+        .eq("id", gymId)
+        .single();
+
+      if (gymError) {
+        setError(gymError.message);
+        return;
+      }
+
+      const subdomain = gym?.subdomain ?? null;
+
+      if (!subdomain) {
+        setError("Gym subdomain not found for this account.");
+        return;
+      }
+
+      let baseUrl: string;
+      try {
+        baseUrl = buildGymBaseUrl({
+          currentHost: window.location.host,
+          subdomain,
+          configuredRootDomain: process.env.NEXT_PUBLIC_ROOT_DOMAIN,
+        });
+      } catch {
+        setError("Unable to resolve your gym URL. Please contact support.");
+        return;
+      }
+
+      // If already on the correct subdomain, skip the cross-domain hop
+      if (window.location.origin === baseUrl) {
+        redirecting = true;
+        window.location.href = "/dashboard";
+        return;
+      }
+
+      const url = `${baseUrl}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
+
+      redirecting = true;
+      setRedirectUrl(url);
+      window.location.href = url;
     } catch {
-      setError("Unable to resolve your gym URL. Please contact support.");
-      setLoading(false);
-      return;
+      setError("Something went wrong. Please try again.");
+    } finally {
+      if (!redirecting) setLoading(false);
     }
-
-    // If already on the correct subdomain, skip the cross-domain hop
-    if (window.location.origin === baseUrl) {
-      window.location.href = "/dashboard";
-      return;
-    }
-
-    const url = `${baseUrl}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
-
-    setRedirectUrl(url);
-    window.location.href = url;
   }
 
   if (redirectUrl) {
@@ -138,7 +144,11 @@ export default function LoginForm() {
       <p className="text-gray-500 mb-6">Sign in to your account</p>
 
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"
+        >
           {error}
         </div>
       )}
@@ -180,8 +190,11 @@ export default function LoginForm() {
       </div>
 
       <p className="mt-6 text-center text-sm text-gray-500">
-        Don't have an account?{" "}
-        <Link href="/register" className="text-black font-medium hover:underline">
+        Don&apos;t have an account?{" "}
+        <Link
+          href="/register"
+          className="text-black font-medium hover:underline"
+        >
           Register
         </Link>
       </p>

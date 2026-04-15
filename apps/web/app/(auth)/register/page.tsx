@@ -1,5 +1,4 @@
 import { getGym } from "@/lib/gym/getGym";
-import { redirect } from "next/navigation";
 import RegisterForm from "./RegisterForm";
 
 export default async function RegisterPage() {
@@ -13,8 +12,7 @@ export default async function RegisterPage() {
             Register via your gym subdomain
           </h1>
           <p className="text-gray-600 mb-4">
-            This page is only available on a gym subdomain, not the main
-            domain.
+            This page is only available on a gym subdomain, not the main domain.
           </p>
           <p className="text-gray-600 mb-4">
             Example:{" "}

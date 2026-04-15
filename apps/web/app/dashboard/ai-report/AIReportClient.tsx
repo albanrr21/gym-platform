@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
 
 interface FatigueReport {
   status: "ok" | "at_risk" | "high";
@@ -59,9 +60,9 @@ const fatigueColors = {
 };
 
 const fatigueLabels = {
-  ok: "✓ On Track",
-  at_risk: "⚠ At Risk",
-  high: "● High Fatigue",
+  ok: "On track",
+  at_risk: "At risk",
+  high: "High fatigue",
 };
 
 export default function AIReportClient() {
@@ -72,33 +73,42 @@ export default function AIReportClient() {
   const [generated, setGenerated] = useState(false);
 
   useEffect(() => {
-    // Load most recent report on mount
-    fetch("/api/ai-report")
-      .then((r) => r.json())
+    let cancelled = false;
+
+    fetchJson<{ report?: AIReport }>("/api/ai-report")
       .then((d) => {
-        if (d.report) setReport(d.report);
-        setFetching(false);
+        if (!cancelled && d.report) setReport(d.report);
       })
-      .catch(() => setFetching(false));
+      .catch(() => {
+        if (!cancelled) setError("Unable to load your latest report.");
+      })
+      .finally(() => {
+        if (!cancelled) setFetching(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function generateReport() {
+    if (loading) return;
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/ai-report", { method: "POST" });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Failed to generate report.");
-        return;
-      }
+      const data = await fetchJson<{ report: AIReport }>("/api/ai-report", {
+        method: "POST",
+      });
 
       setReport(data.report);
       setGenerated(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      if (err instanceof FetchJsonError) {
+        setError(err.message);
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -115,7 +125,7 @@ export default function AIReportClient() {
           href="/dashboard"
           className="text-sm text-gray-500 hover:text-gray-700"
         >
-          ← Back
+          Back
         </Link>
         <h1 className="text-sm font-semibold text-gray-900">
           AI Performance Report
@@ -155,7 +165,7 @@ export default function AIReportClient() {
 
           {generated && (
             <p className="text-xs text-green-600 mt-2">
-              ✓ New report generated and saved
+              New report generated and saved.
             </p>
           )}
         </div>
@@ -181,7 +191,7 @@ export default function AIReportClient() {
               No report generated yet.
             </p>
             <p className="text-xs text-gray-400">
-              Click "Generate Report" to get your AI performance analysis.
+              Click Generate Report to get your AI performance analysis.
             </p>
           </div>
         )}
@@ -280,7 +290,7 @@ export default function AIReportClient() {
                       {report.plateau.exercise}
                     </span>
                     {report.plateau.weeks_stalled &&
-                      ` — stalled for ${report.plateau.weeks_stalled} week${report.plateau.weeks_stalled > 1 ? "s" : ""}`}
+                      ` - stalled for ${report.plateau.weeks_stalled} week${report.plateau.weeks_stalled > 1 ? "s" : ""}`}
                   </p>
                 )}
                 {report.plateau.recommendation && (
@@ -321,7 +331,7 @@ export default function AIReportClient() {
                           <span className="text-gray-400">
                             {item.current_max_kg}kg
                           </span>
-                          <span className="text-gray-300">→</span>
+                          <span className="text-gray-300">-&gt;</span>
                           <span className="font-semibold text-black">
                             {item.suggested_next_kg}kg
                           </span>

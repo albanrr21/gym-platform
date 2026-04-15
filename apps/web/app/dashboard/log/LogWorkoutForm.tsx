@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDebouncedCallback } from "use-debounce";
+import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
 
 interface ExerciseSet {
   weight_kg: number;
@@ -78,10 +79,9 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
       return n;
     });
     try {
-      const res = await fetch(
+      const data = await fetchJson<{ exercises?: ExerciseResult[] }>(
         `/api/exercises/search?name=${encodeURIComponent(term)}`,
       );
-      const data = await res.json();
       setSearchResults((prev) => {
         const n = [...prev];
         n[index] = data.exercises || [];
@@ -231,6 +231,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
   // ── Submit ───────────────────────────────────────────
   async function handleSubmit() {
+    if (loading) return;
     setLoading(true);
     setError("");
 
@@ -248,21 +249,26 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
       return;
     }
 
-    const res = await fetch("/api/workouts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ exercises, notes, gym_id: gymId }),
-    });
+    try {
+      await fetchJson<{ workout: { id: string } }>("/api/workouts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exercises, notes, gym_id: gymId }),
+      });
 
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "Failed to save workout.");
+      router.push("/dashboard?saved=workout");
+      router.refresh();
+    } catch (err) {
+      if (err instanceof FetchJsonError) {
+        setError(err.message);
+      } else {
+        setError(
+          "Unable to save workout. Check your connection and try again.",
+        );
+      }
+    } finally {
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -273,7 +279,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
           onClick={() => router.back()}
           className="text-sm text-gray-500 hover:text-gray-700"
         >
-          ← Cancel
+          Cancel
         </button>
         <h1 className="text-sm font-semibold text-gray-900">Log Workout</h1>
         <button
@@ -552,7 +558,11 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
         {/* Error */}
         {error && (
-          <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+          <div
+            role="alert"
+            aria-live="polite"
+            className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
+          >
             {error}
           </div>
         )}
@@ -576,7 +586,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                 onClick={closeInfo}
                 className="text-sm text-gray-400 hover:text-gray-600"
               >
-                ✕
+                Close
               </button>
               <h2 className="text-sm font-semibold text-gray-900 capitalize text-center flex-1 px-4 truncate">
                 {infoModal.name}

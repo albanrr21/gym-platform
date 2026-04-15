@@ -15,6 +15,7 @@ export default function RegisterForm({ gymId, gymName }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
@@ -29,7 +30,9 @@ export default function RegisterForm({ gymId, gymName }: Props) {
   }
 
   async function handleRegister() {
+    if (loading) return;
     setError("");
+    setSuccess("");
     const validationError = validate();
     if (validationError) {
       setError(validationError);
@@ -37,25 +40,37 @@ export default function RegisterForm({ gymId, gymName }: Props) {
     }
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          gym_id: gymId,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            gym_id: gymId,
+          },
         },
-      },
-    });
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      if (!data.session) {
+        setSuccess(
+          "Account created. Check your email to confirm, then sign in.",
+        );
+        return;
+      }
+
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
-    router.refresh();
   }
 
   return (
@@ -63,8 +78,22 @@ export default function RegisterForm({ gymId, gymName }: Props) {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Create account</h1>
       <p className="text-gray-500 mb-6">Join {gymName}</p>
 
+      {success && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm"
+        >
+          {success}
+        </div>
+      )}
+
       {error && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"
+        >
           {error}
         </div>
       )}

@@ -2,6 +2,34 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getGym } from "@/lib/gym/getGym";
 
+function pickOne<T>(value: T | T[] | null | undefined): T | null {
+  if (!value) return null;
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+type LeaderboardEmbeddedWorkout = {
+  user_id: string | null;
+  logged_at: string | null;
+  gym_id: string | null;
+};
+
+type LeaderboardEmbeddedExercise = {
+  workout_id: string | null;
+  workouts: LeaderboardEmbeddedWorkout | LeaderboardEmbeddedWorkout[] | null;
+};
+
+type LeaderboardSetRow = {
+  weight_kg: number | null;
+  reps: number | null;
+  completed: boolean | null;
+  exercises: LeaderboardEmbeddedExercise | LeaderboardEmbeddedExercise[] | null;
+};
+
+type LeaderboardWorkoutRow = {
+  user_id: string;
+  logged_at: string;
+};
+
 export async function GET() {
   const supabase = await createClient();
   const {
@@ -44,11 +72,15 @@ export async function GET() {
     .eq("completed", true);
 
   // Filter to this gym's members only
-  const gymSets = (setsData || []).filter(
-    (s: any) =>
-      memberIds.includes(s.exercises?.workouts?.user_id) &&
-      s.exercises?.workouts?.gym_id === gym.id,
-  );
+  const typedSets = (setsData ?? []) as LeaderboardSetRow[];
+  const gymSets = typedSets.filter((s) => {
+    const exercise = pickOne<LeaderboardEmbeddedExercise>(s.exercises);
+    const workout = pickOne<LeaderboardEmbeddedWorkout>(exercise?.workouts);
+    const uid = workout?.user_id ?? null;
+    const gid = workout?.gym_id ?? null;
+    if (typeof uid !== "string") return false;
+    return memberIds.includes(uid) && gid === gym.id;
+  });
 
   // Get all workouts for this gym
   const { data: workoutsData } = await supabase
@@ -56,13 +88,16 @@ export async function GET() {
     .select("user_id, logged_at")
     .eq("gym_id", gym.id)
     .in("user_id", memberIds);
+  const typedWorkouts = (workoutsData ?? []) as LeaderboardWorkoutRow[];
 
   // Volume leaderboard
   const volumeMap: Record<string, number> = {};
-  gymSets.forEach((s: any) => {
-    const uid = s.exercises?.workouts?.user_id;
+  gymSets.forEach((s) => {
+    const exercise = pickOne<LeaderboardEmbeddedExercise>(s.exercises);
+    const uid =
+      pickOne<LeaderboardEmbeddedWorkout>(exercise?.workouts)?.user_id ?? null;
     if (!uid) return;
-    volumeMap[uid] = (volumeMap[uid] || 0) + (s.weight_kg || 0) * (s.reps || 0);
+    volumeMap[uid] = (volumeMap[uid] || 0) + (s.weight_kg ?? 0) * (s.reps ?? 0);
   });
 
   // Consistency leaderboard (workouts this month)
@@ -71,7 +106,7 @@ export async function GET() {
   monthStart.setHours(0, 0, 0, 0);
 
   const consistencyMap: Record<string, number> = {};
-  (workoutsData || []).forEach((w: any) => {
+  typedWorkouts.forEach((w) => {
     if (new Date(w.logged_at) >= monthStart) {
       consistencyMap[w.user_id] = (consistencyMap[w.user_id] || 0) + 1;
     }

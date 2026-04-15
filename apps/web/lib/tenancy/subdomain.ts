@@ -63,10 +63,11 @@ export function getSubdomainFromHost(hostHeader: string | null | undefined) {
   const rootDomain = getConfiguredRootDomain();
 
   if (rootDomain) {
-    if (hostname === rootDomain || hostname === `www.${rootDomain}`) return null;
+    if (hostname === rootDomain || hostname === `www.${rootDomain}`)
+      return null;
 
     if (hostname.endsWith(`.${rootDomain}`)) {
-      const sub = hostname.slice(0, -(`.${rootDomain}`).length);
+      const sub = hostname.slice(0, -`.${rootDomain}`.length);
       if (!sub || sub === "www") return null;
       // If someone hits `a.b.example.com`, treat the left-most label as the tenant.
       return sub.split(".")[0] || null;

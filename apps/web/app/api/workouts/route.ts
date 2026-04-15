@@ -24,7 +24,12 @@ const UUID_PATTERN =
 const MAX_EXERCISES = 30;
 const MAX_SETS_PER_EXERCISE = 20;
 const MAX_NOTES_LENGTH = 2000;
-const RPC_VALIDATION_ERROR_CODES = new Set(["22023", "22P02", "23514", "P0001"]);
+const RPC_VALIDATION_ERROR_CODES = new Set([
+  "22023",
+  "22P02",
+  "23514",
+  "P0001",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -34,9 +39,9 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function parseWorkoutPayload(payload: unknown):
-  | { ok: true; data: WorkoutPayload }
-  | { ok: false; error: string } {
+function parseWorkoutPayload(
+  payload: unknown,
+): { ok: true; data: WorkoutPayload } | { ok: false; error: string } {
   if (!isRecord(payload)) {
     return { ok: false, error: "Invalid payload" };
   }
@@ -70,7 +75,11 @@ function parseWorkoutPayload(payload: unknown):
 
   const exercises: WorkoutExerciseInput[] = [];
 
-  for (let exerciseIndex = 0; exerciseIndex < rawExercises.length; exerciseIndex++) {
+  for (
+    let exerciseIndex = 0;
+    exerciseIndex < rawExercises.length;
+    exerciseIndex++
+  ) {
     const rawExercise = rawExercises[exerciseIndex];
     if (!isRecord(rawExercise)) {
       return { ok: false, error: `Exercise ${exerciseIndex + 1} is invalid` };
@@ -193,7 +202,10 @@ export async function POST(request: NextRequest) {
   try {
     payload = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid JSON payload" },
+      { status: 400 },
+    );
   }
 
   const parsedPayload = parseWorkoutPayload(payload);

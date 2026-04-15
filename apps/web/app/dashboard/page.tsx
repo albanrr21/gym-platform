@@ -4,7 +4,27 @@ import { redirect } from "next/navigation";
 import LogoutButton from "./LogoutButton";
 import Link from "next/link";
 
-export default async function DashboardPage() {
+type SearchParams = Record<string, string | string[] | undefined>;
+
+type WorkoutExercisePreview = {
+  id: string;
+  name: string;
+  sets: number;
+  reps: number;
+  weight_kg: number;
+  rpe: number | null;
+};
+
+function coerceExercises(value: unknown): WorkoutExercisePreview[] {
+  if (!Array.isArray(value)) return [];
+  return value as WorkoutExercisePreview[];
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -35,9 +55,24 @@ export default async function DashboardPage() {
     .order("logged_at", { ascending: false })
     .limit(5);
 
+  const resolvedSearchParams = await Promise.resolve(searchParams ?? {});
+  const savedParam = resolvedSearchParams.saved;
+  const saved = typeof savedParam === "string" ? savedParam : null;
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-2xl mx-auto">
+        {saved === "workout" && (
+          <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 flex items-center justify-between gap-4">
+            <p className="text-sm font-medium">Workout saved.</p>
+            <Link
+              href="/dashboard"
+              className="text-sm text-green-800/80 hover:text-green-900 underline underline-offset-2"
+            >
+              Dismiss
+            </Link>
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
@@ -95,43 +130,50 @@ export default async function DashboardPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {workouts.map((workout) => (
-                <div
-                  key={workout.id}
-                  className="bg-white border border-gray-200 rounded-xl p-4"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-900">
-                      {(workout.exercises as any[]).length} exercise
-                      {(workout.exercises as any[]).length !== 1 ? "s" : ""}
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {new Date(workout.logged_at).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </div>
+              {workouts.map((workout) => {
+                const exercises = coerceExercises(workout.exercises);
 
-                  <div className="flex flex-wrap gap-1.5">
-                    {(workout.exercises as any[]).map((ex) => (
-                      <span
-                        key={ex.id}
-                        className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
-                      >
-                        {ex.name} — {ex.sets}×{ex.reps} @ {ex.weight_kg}kg
+                return (
+                  <div
+                    key={workout.id}
+                    className="bg-white border border-gray-200 rounded-xl p-4"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-900">
+                        {exercises.length} exercise
+                        {exercises.length !== 1 ? "s" : ""}
                       </span>
-                    ))}
-                  </div>
+                      <span className="text-xs text-gray-400">
+                        {new Date(workout.logged_at).toLocaleDateString(
+                          "en-GB",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          },
+                        )}
+                      </span>
+                    </div>
 
-                  {workout.notes && (
-                    <p className="text-xs text-gray-400 mt-2 italic">
-                      {workout.notes}
-                    </p>
-                  )}
-                </div>
-              ))}
+                    <div className="flex flex-wrap gap-1.5">
+                      {exercises.map((ex) => (
+                        <span
+                          key={ex.id}
+                          className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
+                        >
+                          {ex.name} — {ex.sets}×{ex.reps} @ {ex.weight_kg}kg
+                        </span>
+                      ))}
+                    </div>
+
+                    {workout.notes && (
+                      <p className="text-xs text-gray-400 mt-2 italic">
+                        {workout.notes}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

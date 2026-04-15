@@ -9,8 +9,6 @@ export async function getGym() {
     headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
   const subdomain = headerSubdomain ?? getSubdomainFromHost(host);
 
-  console.log("x-gym-subdomain header:", subdomain);
-
   if (!subdomain) return null;
 
   const supabase = await createClient();
@@ -21,8 +19,6 @@ export async function getGym() {
     .eq("subdomain", subdomain)
     .single();
 
-  console.log("gym:", gym);
-  console.log("gym error:", error);
-
+  if (error) return null;
   return gym;
 }

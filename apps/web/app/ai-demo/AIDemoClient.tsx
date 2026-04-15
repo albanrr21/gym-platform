@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
 
 const TYPES = [
   {
@@ -43,23 +44,26 @@ export default function AIDemoClient() {
 
   async function handleSubmit() {
     if (!input.trim()) return;
+    if (loading) return;
     setLoading(true);
     setError("");
     setResponse("");
 
     try {
-      const res = await fetch("/api/ai", {
+      const data = await fetchJson<{ response: string }>("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: input, type: activeType }),
       });
-
-      if (!res.ok) throw new Error("API request failed");
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
       setResponse(data.response);
-    } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+    } catch (err: unknown) {
+      if (err instanceof FetchJsonError) {
+        setError(err.message);
+      } else if (err instanceof Error) {
+        setError(err.message || "Something went wrong. Please try again.");
+      } else {
+        setError("Something went wrong. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
