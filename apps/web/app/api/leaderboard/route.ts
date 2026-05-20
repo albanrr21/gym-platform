@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { getGym } from "@/lib/gym/getGym";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 function pickOne<T>(value: T | T[] | null | undefined): T | null {
   if (!value) return null;
@@ -38,6 +38,19 @@ type LeaderboardEntry = {
   isCurrentUser: boolean;
   rank: number;
 };
+
+function createAdminClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    },
+  );
+}
 
 export async function GET() {
   const supabase = await createClient();
