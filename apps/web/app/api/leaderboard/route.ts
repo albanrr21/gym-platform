@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 import { getGym } from "@/lib/gym/getGym";
 
@@ -30,8 +31,17 @@ type LeaderboardWorkoutRow = {
   logged_at: string;
 };
 
+type LeaderboardEntry = {
+  userId: string;
+  name: string;
+  value: number;
+  isCurrentUser: boolean;
+  rank: number;
+};
+
 export async function GET() {
   const supabase = await createClient();
+  const adminSupabase = createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -43,7 +53,7 @@ export async function GET() {
     return NextResponse.json({ error: "No gym found" }, { status: 400 });
 
   // Get all members in this gym
-  const { data: members } = await supabase
+  const { data: members } = await adminSupabase
     .from("users")
     .select("id, full_name")
     .eq("gym_id", gym.id)
@@ -56,7 +66,7 @@ export async function GET() {
   const memberIds = members.map((m) => m.id);
 
   // Get all completed sets for this gym
-  const { data: setsData } = await supabase
+  const { data: setsData } = await adminSupabase
     .from("sets")
     .select(
       `
@@ -83,7 +93,7 @@ export async function GET() {
   });
 
   // Get all workouts for this gym
-  const { data: workoutsData } = await supabase
+  const { data: workoutsData } = await adminSupabase
     .from("workouts")
     .select("user_id, logged_at")
     .eq("gym_id", gym.id)
@@ -116,31 +126,40 @@ export async function GET() {
   const getMemberName = (id: string) =>
     members.find((m) => m.id === id)?.full_name || "Unknown";
 
-  const volumeLeaderboard = Object.entries(volumeMap)
+  const volumeAll: LeaderboardEntry[] = Object.entries(volumeMap)
     .map(([userId, volume]) => ({
       userId,
       name: getMemberName(userId),
       value: Math.round(volume),
       isCurrentUser: userId === user.id,
+      rank: 0,
     }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 10)
     .map((entry, i) => ({ ...entry, rank: i + 1 }));
 
-  const consistencyLeaderboard = Object.entries(consistencyMap)
+  const consistencyAll: LeaderboardEntry[] = Object.entries(consistencyMap)
     .map(([userId, count]) => ({
       userId,
       name: getMemberName(userId),
       value: count,
       isCurrentUser: userId === user.id,
+      rank: 0,
     }))
     .sort((a, b) => b.value - a.value)
-    .slice(0, 10)
     .map((entry, i) => ({ ...entry, rank: i + 1 }));
+
+  const volumeLeaderboard = volumeAll.slice(0, 10);
+  const consistencyLeaderboard = consistencyAll.slice(0, 10);
+  const volumeCurrentUser = volumeAll.find((entry) => entry.userId === user.id);
+  const consistencyCurrentUser = consistencyAll.find(
+    (entry) => entry.userId === user.id,
+  );
 
   return NextResponse.json({
     volume: volumeLeaderboard,
     consistency: consistencyLeaderboard,
+    volumeCurrentUser: volumeCurrentUser ?? null,
+    consistencyCurrentUser: consistencyCurrentUser ?? null,
     gymName: gym.name,
   });
 }

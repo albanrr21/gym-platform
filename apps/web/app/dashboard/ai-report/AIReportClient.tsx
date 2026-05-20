@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
-import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
+import { fetchJson } from "@/lib/http/fetchJson";
+import { useToast } from "@/components/ui/Toast";
 
 interface FatigueReport {
   status: "ok" | "at_risk" | "high";
@@ -69,8 +69,9 @@ export default function AIReportClient() {
   const [report, setReport] = useState<AIReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState("");
   const [generated, setGenerated] = useState(false);
+  const [streamedText, setStreamedText] = useState("");
+  const { showToast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -80,7 +81,8 @@ export default function AIReportClient() {
         if (!cancelled && d.report) setReport(d.report);
       })
       .catch(() => {
-        if (!cancelled) setError("Unable to load your latest report.");
+        if (!cancelled)
+          showToast("Unable to load your latest report.", "error");
       })
       .finally(() => {
         if (!cancelled) setFetching(false);
@@ -94,20 +96,40 @@ export default function AIReportClient() {
   async function generateReport() {
     if (loading) return;
     setLoading(true);
-    setError("");
+    setStreamedText("");
 
     try {
-      const data = await fetchJson<{ report: AIReport }>("/api/ai-report", {
-        method: "POST",
-      });
+      const response = await fetch("/api/ai-report", { method: "POST" });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(body?.error ?? "Failed to generate report.");
+      }
+      if (!response.body) {
+        throw new Error("Streaming is not available.");
+      }
 
-      setReport(data.report);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let raw = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        raw += decoder.decode(value, { stream: true });
+        setStreamedText(raw);
+      }
+
+      const clean = raw.replace(/```json|```/g, "").trim();
+      const parsed = JSON.parse(clean) as AIReport;
+      setReport(parsed);
       setGenerated(true);
+      showToast("AI report generated.", "success");
     } catch (err) {
-      if (err instanceof FetchJsonError) {
-        setError(err.message);
+      if (err instanceof Error) {
+        showToast(err.message, "error");
       } else {
-        setError("Something went wrong. Please try again.");
+        showToast("Something went wrong. Please try again.", "error");
       }
     } finally {
       setLoading(false);
@@ -118,236 +140,219 @@ export default function AIReportClient() {
   const fatigueStyle = fatigue ? fatigueColors[fatigue.status] : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <Link
-          href="/dashboard"
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Back
-        </Link>
-        <h1 className="text-sm font-semibold text-gray-900">
-          AI Performance Report
-        </h1>
-        <div className="w-10" />
-      </div>
-
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
-        {/* Generate button */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                Weekly Analysis
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Based on your last 4 weeks of training
-              </p>
-            </div>
-            <button
-              onClick={generateReport}
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Analyzing...
-                </>
-              ) : report ? (
-                "Regenerate"
-              ) : (
-                "Generate Report"
-              )}
-            </button>
-          </div>
-
-          {generated && (
-            <p className="text-xs text-green-600 mt-2">
-              New report generated and saved.
+    <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
+      <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Weekly Analysis</p>
+            <p className="mt-0.5 text-xs text-gray-400">
+              Based on your last 4 weeks of training
             </p>
-          )}
+          </div>
+          <button
+            onClick={generateReport}
+            disabled={loading}
+            className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {loading ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                Analyzing...
+              </>
+            ) : report ? (
+              "Regenerate"
+            ) : (
+              "Generate Report"
+            )}
+          </button>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
+        {generated && (
+          <p className="mt-2 text-xs text-green-600">
+            New report generated and saved.
+          </p>
         )}
+      </div>
 
-        {/* Loading state */}
-        {fetching && (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
-          </div>
-        )}
+      {/* Errors are surfaced via toasts */}
 
-        {/* No report yet */}
-        {!fetching && !report && !loading && (
-          <div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center">
-            <p className="text-sm text-gray-400 mb-1">
-              No report generated yet.
-            </p>
-            <p className="text-xs text-gray-400">
-              Click Generate Report to get your AI performance analysis.
-            </p>
-          </div>
-        )}
+      {/* Loading state */}
+      {fetching && (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+        </div>
+      )}
 
-        {/* Report sections */}
-        {report && (
-          <>
-            {/* Weekly summary */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">
-                Weekly Summary
-              </h2>
-              <div className="grid grid-cols-3 gap-3 mb-3">
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">Sessions</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {report.weekly_summary.sessions_this_week}
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">Volume</p>
-                  <p className="text-xl font-bold text-gray-900">
-                    {report.weekly_summary.total_volume_kg >= 1000
-                      ? `${(report.weekly_summary.total_volume_kg / 1000).toFixed(1)}k`
-                      : report.weekly_summary.total_volume_kg}
-                    <span className="text-xs font-normal text-gray-400 ml-0.5">
-                      kg
-                    </span>
-                  </p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-gray-400 mb-1">vs Last Week</p>
-                  <p
-                    className={`text-xl font-bold ${report.weekly_summary.vs_last_week.startsWith("+") ? "text-green-600" : report.weekly_summary.vs_last_week.startsWith("-") ? "text-red-500" : "text-gray-900"}`}
-                  >
-                    {report.weekly_summary.vs_last_week}
-                  </p>
-                </div>
+      {loading && streamedText && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="mb-2 text-xs font-medium text-gray-500">
+            Streaming analysis...
+          </p>
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-gray-700">
+            {streamedText}
+          </pre>
+        </div>
+      )}
+
+      {/* No report yet */}
+      {!fetching && !report && !loading && (
+        <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
+          <p className="mb-1 text-sm text-gray-400">No report generated yet.</p>
+          <p className="text-xs text-gray-400">
+            Click Generate Report to get your AI performance analysis.
+          </p>
+        </div>
+      )}
+
+      {/* Report sections */}
+      {report && (
+        <>
+          {/* Weekly summary */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4">
+            <h2 className="mb-3 text-sm font-semibold text-gray-900">
+              Weekly Summary
+            </h2>
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <div className="rounded-lg bg-gray-50 p-3 text-center">
+                <p className="mb-1 text-xs text-gray-400">Sessions</p>
+                <p className="text-xl font-bold text-gray-900">
+                  {report.weekly_summary.sessions_this_week}
+                </p>
               </div>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-xs text-gray-500 leading-relaxed">
-                  ✦ {report.weekly_summary.highlight}
+              <div className="rounded-lg bg-gray-50 p-3 text-center">
+                <p className="mb-1 text-xs text-gray-400">Volume</p>
+                <p className="text-xl font-bold text-gray-900">
+                  {report.weekly_summary.total_volume_kg >= 1000
+                    ? `${(report.weekly_summary.total_volume_kg / 1000).toFixed(1)}k`
+                    : report.weekly_summary.total_volume_kg}
+                  <span className="ml-0.5 text-xs font-normal text-gray-400">
+                    kg
+                  </span>
+                </p>
+              </div>
+              <div className="rounded-lg bg-gray-50 p-3 text-center">
+                <p className="mb-1 text-xs text-gray-400">vs Last Week</p>
+                <p
+                  className={`text-xl font-bold ${report.weekly_summary.vs_last_week.startsWith("+") ? "text-green-600" : report.weekly_summary.vs_last_week.startsWith("-") ? "text-red-500" : "text-gray-900"}`}
+                >
+                  {report.weekly_summary.vs_last_week}
                 </p>
               </div>
             </div>
+            <div className="rounded-lg bg-gray-50 p-3">
+              <p className="text-xs leading-relaxed text-gray-500">
+                ✦ {report.weekly_summary.highlight}
+              </p>
+            </div>
+          </div>
 
-            {/* Fatigue */}
-            {fatigue && fatigueStyle && (
-              <div
-                className={`border rounded-xl p-4 ${fatigueStyle.bg} ${fatigueStyle.border}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-sm font-semibold text-gray-900">
-                    Fatigue Assessment
-                  </h2>
-                  <span
-                    className={`text-xs font-medium px-2.5 py-1 rounded-full ${fatigueStyle.badge}`}
-                  >
-                    {fatigueLabels[fatigue.status]}
-                  </span>
-                </div>
-                <p className={`text-sm mb-2 ${fatigueStyle.text}`}>
-                  {fatigue.message}
+          {/* Fatigue */}
+          {fatigue && fatigueStyle && (
+            <div
+              className={`border rounded-xl p-4 ${fatigueStyle.bg} ${fatigueStyle.border}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Fatigue Assessment
+                </h2>
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${fatigueStyle.badge}`}
+                >
+                  {fatigueLabels[fatigue.status]}
+                </span>
+              </div>
+              <p className={`text-sm mb-2 ${fatigueStyle.text}`}>
+                {fatigue.message}
+              </p>
+              <div className="bg-white/60 rounded-lg p-3">
+                <p className="text-xs text-gray-600 font-medium mb-0.5">
+                  Recommendation
                 </p>
+                <p className="text-sm text-gray-700">
+                  {fatigue.recommendation}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Plateau */}
+          {report.plateau && (
+            <div
+              className={`border rounded-xl p-4 ${report.plateau.detected ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="text-sm font-semibold text-gray-900">
+                  Plateau Detection
+                </h2>
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full ${report.plateau.detected ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}
+                >
+                  {report.plateau.detected ? "Plateau Detected" : "No Plateau"}
+                </span>
+              </div>
+              {report.plateau.detected && report.plateau.exercise && (
+                <p className="text-sm text-orange-700 mb-2">
+                  <span className="font-medium capitalize">
+                    {report.plateau.exercise}
+                  </span>
+                  {report.plateau.weeks_stalled &&
+                    ` - stalled for ${report.plateau.weeks_stalled} week${report.plateau.weeks_stalled > 1 ? "s" : ""}`}
+                </p>
+              )}
+              {report.plateau.recommendation && (
                 <div className="bg-white/60 rounded-lg p-3">
                   <p className="text-xs text-gray-600 font-medium mb-0.5">
                     Recommendation
                   </p>
                   <p className="text-sm text-gray-700">
-                    {fatigue.recommendation}
+                    {report.plateau.recommendation}
                   </p>
                 </div>
-              </div>
-            )}
+              )}
+              {!report.plateau.detected && (
+                <p className="text-sm text-green-700">
+                  Your lifts are progressing well. Keep it up.
+                </p>
+              )}
+            </div>
+          )}
 
-            {/* Plateau */}
-            {report.plateau && (
-              <div
-                className={`border rounded-xl p-4 ${report.plateau.detected ? "bg-orange-50 border-orange-200" : "bg-white border-gray-200"}`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="text-sm font-semibold text-gray-900">
-                    Plateau Detection
-                  </h2>
-                  <span
-                    className={`text-xs font-medium px-2.5 py-1 rounded-full ${report.plateau.detected ? "bg-orange-100 text-orange-700" : "bg-green-100 text-green-700"}`}
+          {/* Progression suggestions */}
+          {report.progression?.length > 0 && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h2 className="text-sm font-semibold text-gray-900 mb-3">
+                Progression Suggestions
+              </h2>
+              <div className="space-y-3">
+                {report.progression.map((item, i) => (
+                  <div
+                    key={i}
+                    className="border border-gray-100 rounded-lg p-3"
                   >
-                    {report.plateau.detected
-                      ? "Plateau Detected"
-                      : "No Plateau"}
-                  </span>
-                </div>
-                {report.plateau.detected && report.plateau.exercise && (
-                  <p className="text-sm text-orange-700 mb-2">
-                    <span className="font-medium capitalize">
-                      {report.plateau.exercise}
-                    </span>
-                    {report.plateau.weeks_stalled &&
-                      ` - stalled for ${report.plateau.weeks_stalled} week${report.plateau.weeks_stalled > 1 ? "s" : ""}`}
-                  </p>
-                )}
-                {report.plateau.recommendation && (
-                  <div className="bg-white/60 rounded-lg p-3">
-                    <p className="text-xs text-gray-600 font-medium mb-0.5">
-                      Recommendation
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {report.plateau.recommendation}
-                    </p>
-                  </div>
-                )}
-                {!report.plateau.detected && (
-                  <p className="text-sm text-green-700">
-                    Your lifts are progressing well. Keep it up.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Progression suggestions */}
-            {report.progression?.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-gray-900 mb-3">
-                  Progression Suggestions
-                </h2>
-                <div className="space-y-3">
-                  {report.progression.map((item, i) => (
-                    <div
-                      key={i}
-                      className="border border-gray-100 rounded-lg p-3"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium text-gray-800 capitalize">
-                          {item.exercise}
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-800 capitalize">
+                        {item.exercise}
+                      </span>
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="text-gray-400">
+                          {item.current_max_kg}kg
                         </span>
-                        <div className="flex items-center gap-1.5 text-sm">
-                          <span className="text-gray-400">
-                            {item.current_max_kg}kg
-                          </span>
-                          <span className="text-gray-300">-&gt;</span>
-                          <span className="font-semibold text-black">
-                            {item.suggested_next_kg}kg
-                          </span>
-                        </div>
+                        <span className="text-gray-300">-&gt;</span>
+                        <span className="font-semibold text-black">
+                          {item.suggested_next_kg}kg
+                        </span>
                       </div>
-                      <p className="text-xs text-gray-400">{item.reasoning}</p>
                     </div>
-                  ))}
-                </div>
+                    <p className="text-xs text-gray-400">{item.reasoning}</p>
+                  </div>
+                ))}
               </div>
-            )}
-          </>
-        )}
+            </div>
+          )}
+        </>
+      )}
 
-        <div className="h-4" />
-      </div>
+      <div className="h-4" />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
 import AnalyticsDashboard from "./AnalyticsDashboard";
+import { Suspense } from "react";
+import AnalyticsSkeleton from "./AnalyticsSkeleton";
 
 export default async function AnalyticsPage() {
   const supabase = await createClient();
@@ -14,5 +16,9 @@ export default async function AnalyticsPage() {
   const gym = await getGym();
   if (!gym) redirect("/login");
 
-  return <AnalyticsDashboard />;
+  return (
+    <Suspense fallback={<AnalyticsSkeleton />}>
+      <AnalyticsDashboard />
+    </Suspense>
+  );
 }

@@ -4,14 +4,15 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { buildGymBaseUrl } from "@/lib/tenancy/subdomain";
 import Link from "next/link";
+import { useToast } from "@/components/ui/Toast";
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const supabase = createClient();
+  const { showToast } = useToast();
 
   function validate(): string | null {
     if (!email.trim()) return "Email is required.";
@@ -23,10 +24,9 @@ export default function LoginForm() {
 
   async function handleLogin() {
     if (loading) return;
-    setError("");
     const validationError = validate();
     if (validationError) {
-      setError(validationError);
+      showToast(validationError, "error");
       return;
     }
     setLoading(true);
@@ -40,7 +40,7 @@ export default function LoginForm() {
       });
 
       if (error) {
-        setError(error.message);
+        showToast(error.message, "error");
         return;
       }
 
@@ -48,7 +48,7 @@ export default function LoginForm() {
       const refreshToken = data.session?.refresh_token;
 
       if (!accessToken || !refreshToken) {
-        setError("Login succeeded but session tokens are missing.");
+        showToast("Login succeeded but session tokens are missing.", "error");
         return;
       }
 
@@ -61,14 +61,14 @@ export default function LoginForm() {
       const gymId = profile?.gym_id ?? data.user.user_metadata?.gym_id ?? null;
 
       if (profileError && !gymId) {
-        setError(profileError.message);
+        showToast(profileError.message, "error");
         return;
       }
 
       if (!gymId) {
-        setError(
-          "This account is not assigned to a gym. Ask an admin to set your gym_id.",
-        );
+        const msg =
+          "This account is not assigned to a gym. Ask an admin to set your gym_id.";
+        showToast(msg, "error");
         return;
       }
 
@@ -79,14 +79,14 @@ export default function LoginForm() {
         .single();
 
       if (gymError) {
-        setError(gymError.message);
+        showToast(gymError.message, "error");
         return;
       }
 
       const subdomain = gym?.subdomain ?? null;
 
       if (!subdomain) {
-        setError("Gym subdomain not found for this account.");
+        showToast("Gym subdomain not found for this account.", "error");
         return;
       }
 
@@ -98,7 +98,10 @@ export default function LoginForm() {
           configuredRootDomain: process.env.NEXT_PUBLIC_ROOT_DOMAIN,
         });
       } catch {
-        setError("Unable to resolve your gym URL. Please contact support.");
+        showToast(
+          "Unable to resolve your gym URL. Please contact support.",
+          "error",
+        );
         return;
       }
 
@@ -109,13 +112,28 @@ export default function LoginForm() {
         return;
       }
 
-      const url = `${baseUrl}/auth/callback?access_token=${encodeURIComponent(accessToken)}&refresh_token=${encodeURIComponent(refreshToken)}`;
-
       redirecting = true;
-      setRedirectUrl(url);
-      window.location.href = url;
+      setRedirectUrl(`${baseUrl}/auth/callback`);
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = `${baseUrl}/auth/callback`;
+
+      [
+        ["access_token", accessToken],
+        ["refresh_token", refreshToken],
+      ].forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
     } catch {
-      setError("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.", "error");
     } finally {
       if (!redirecting) setLoading(false);
     }
@@ -143,16 +161,6 @@ export default function LoginForm() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h1>
       <p className="text-gray-500 mb-6">Sign in to your account</p>
 
-      {error && (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"
-        >
-          {error}
-        </div>
-      )}
-
       <div className="space-y-4 text-gray-900">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -178,6 +186,14 @@ export default function LoginForm() {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
             placeholder="••••••••"
           />
+          <div className="mt-1 text-right">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-gray-600 hover:text-gray-900 hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
         </div>
 
         <button

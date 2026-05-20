@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
+import { useToast } from "@/components/ui/Toast";
 
 const TYPES = [
   {
@@ -36,33 +37,51 @@ const TYPES = [
 export default function AIDemoClient() {
   const [activeType, setActiveType] = useState("workout");
   const [input, setInput] = useState("");
-  const [response, setResponse] = useState("");
+  const [messages, setMessages] = useState<
+    { role: "user" | "assistant"; content: string }[]
+  >([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const { showToast } = useToast();
+  const endRef = useRef<HTMLDivElement | null>(null);
 
   const currentType = TYPES.find((t) => t.id === activeType)!;
 
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
   async function handleSubmit() {
-    if (!input.trim()) return;
+    const userMessage = input.trim();
+    if (!userMessage) return;
     if (loading) return;
     setLoading(true);
-    setError("");
-    setResponse("");
+    setInput("");
+
+    const nextMessages = [
+      ...messages,
+      { role: "user" as const, content: userMessage },
+    ];
+    setMessages(nextMessages);
 
     try {
       const data = await fetchJson<{ response: string }>("/api/ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input, type: activeType }),
+        body: JSON.stringify({ messages: nextMessages, type: activeType }),
       });
-      setResponse(data.response);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.response },
+      ]);
     } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again.";
       if (err instanceof FetchJsonError) {
-        setError(err.message);
-      } else if (err instanceof Error) {
-        setError(err.message || "Something went wrong. Please try again.");
+        showToast(err.message, "error");
       } else {
-        setError("Something went wrong. Please try again.");
+        showToast(msg, "error");
       }
     } finally {
       setLoading(false);
@@ -88,8 +107,7 @@ export default function AIDemoClient() {
               onClick={() => {
                 setActiveType(t.id);
                 setInput("");
-                setResponse("");
-                setError("");
+                setMessages([]);
               }}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeType === t.id
@@ -165,36 +183,44 @@ export default function AIDemoClient() {
           </div>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl">
-            <p className="text-sm font-medium text-red-700">Error</p>
-            <p className="text-sm text-red-600 mt-0.5">{error}</p>
+        {/* Errors surfaced as toasts */}
+
+        {messages.length > 0 && (
+          <div className="mb-4 flex justify-end">
+            <button
+              onClick={() => setMessages([])}
+              className="text-xs rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-gray-600 hover:bg-gray-50"
+            >
+              Clear conversation
+            </button>
           </div>
         )}
 
-        {/* Response */}
-        {response && (
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
-              <div className="w-5 h-5 bg-black rounded-full flex items-center justify-center">
-                <span className="text-white text-xs font-medium">AI</span>
+        {/* Chat thread */}
+        {messages.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 max-h-[420px] overflow-auto">
+            {messages.map((message, idx) => (
+              <div
+                key={`${message.role}-${idx}`}
+                className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              >
+                <div
+                  className={`max-w-[85%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap ${
+                    message.role === "user"
+                      ? "bg-black text-white"
+                      : "bg-gray-100 text-gray-800"
+                  }`}
+                >
+                  {message.content}
+                </div>
               </div>
-              <span className="text-sm font-medium text-gray-700">
-                Response
-              </span>
-              <span className="ml-auto text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
-                {currentType.label}
-              </span>
-            </div>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
-              {response}
-            </p>
+            ))}
+            <div ref={endRef} />
           </div>
         )}
 
         {/* Empty state */}
-        {!response && !error && !loading && (
+        {messages.length === 0 && !loading && (
           <div className="bg-white border border-dashed border-gray-200 rounded-xl p-8 text-center">
             <p className="text-sm text-gray-400">
               Your AI response will appear here.

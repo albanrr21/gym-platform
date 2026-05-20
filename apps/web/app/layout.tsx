@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthContext";
+import { validateEnv } from "@/lib/env";
+import { ToastProvider } from "@/components/ui/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,19 +25,18 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  validateEnv();
+
   return (
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning={true}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AuthProvider>
       </body>
-      <script
-        src="https://ai-assistant-builder-nine.vercel.app/api/embed/d1cb9c7e-3ba4-47b9-805f-30a00b99c02e"
-        data-chatbot-id="d1cb9c7e-3ba4-47b9-805f-30a00b99c02e"
-        async
-      ></script>
     </html>
   );
 }

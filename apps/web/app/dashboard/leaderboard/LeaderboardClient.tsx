@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 
 interface LeaderboardEntry {
   userId: string;
@@ -14,6 +13,8 @@ interface LeaderboardEntry {
 interface LeaderboardData {
   volume: LeaderboardEntry[];
   consistency: LeaderboardEntry[];
+  volumeCurrentUser: LeaderboardEntry | null;
+  consistencyCurrentUser: LeaderboardEntry | null;
   gymName: string;
 }
 
@@ -110,38 +111,56 @@ function LeaderboardTable({
 export default function LeaderboardClient() {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<"volume" | "consistency">("volume");
 
-  useEffect(() => {
+  async function loadLeaderboard(isRefresh = false) {
+    if (isRefresh) setRefreshing(true);
     fetch("/api/leaderboard")
       .then((r) => r.json())
       .then((d) => {
         setData(d);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => setLoading(false))
+      .finally(() => {
+        if (isRefresh) setRefreshing(false);
+      });
+  }
+
+  useEffect(() => {
+    loadLeaderboard(false);
+    const timer = setInterval(() => {
+      loadLeaderboard(true);
+    }, 60_000);
+    return () => clearInterval(timer);
   }, []);
 
+  const tabEntries =
+    tab === "volume" ? data?.volume || [] : data?.consistency || [];
+  const tabCurrentUser =
+    tab === "volume" ? data?.volumeCurrentUser : data?.consistencyCurrentUser;
+  const userInTopTen = tabEntries.some((entry) => entry.isCurrentUser);
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <Link
-          href="/dashboard"
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          ← Back
-        </Link>
-        <div className="text-center">
+    <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
+      <div className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3">
+        <div>
           <h1 className="text-sm font-semibold text-gray-900">Leaderboard</h1>
           {data?.gymName && (
             <p className="text-xs text-gray-400">{data.gymName}</p>
           )}
         </div>
-        <div className="w-10" />
+        <button
+          onClick={() => loadLeaderboard(true)}
+          disabled={refreshing}
+          className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+        >
+          {refreshing ? "Refreshing..." : "Refresh"}
+        </button>
       </div>
 
-      <div className="max-w-2xl mx-auto p-4">
+      <div>
         {/* Tabs */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
           <button
@@ -165,6 +184,20 @@ export default function LeaderboardClient() {
             Consistency
           </button>
         </div>
+
+        {!loading && tabCurrentUser && !userInTopTen && (
+          <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
+            <p className="text-xs text-gray-400 mb-1">Your rank</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-gray-900">
+                #{tabCurrentUser.rank} {tabCurrentUser.name}
+              </p>
+              <p className="text-sm font-semibold text-gray-900">
+                {tabCurrentUser.value} {tab === "volume" ? "kg" : "sessions"}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">

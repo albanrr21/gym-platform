@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDebouncedCallback } from "use-debounce";
 import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
+import { useToast } from "@/components/ui/Toast";
 
 interface ExerciseSet {
   weight_kg: number;
@@ -40,6 +41,11 @@ interface InfoModal {
   exerciseId: string;
 }
 
+interface LastSet {
+  weight_kg: number;
+  reps: number;
+}
+
 const emptySet = (): ExerciseSet => ({
   weight_kg: 0,
   reps: 10,
@@ -52,18 +58,31 @@ const emptyExercise = (): Exercise => ({
   sets: [emptySet(), emptySet(), emptySet()],
 });
 
-export default function LogWorkoutForm({ gymId }: { gymId: string }) {
-  const [exercises, setExercises] = useState<Exercise[]>([emptyExercise()]);
+export default function LogWorkoutForm({
+  gymId,
+  initialExerciseName = "",
+}: {
+  gymId: string;
+  initialExerciseName?: string;
+}) {
+  const [exercises, setExercises] = useState<Exercise[]>([
+    { ...emptyExercise(), name: initialExerciseName.trim() },
+  ]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [searchResults, setSearchResults] = useState<ExerciseResult[][]>([[]]);
   const [searching, setSearching] = useState<boolean[]>([false]);
   const [infoModal, setInfoModal] = useState<InfoModal | null>(null);
   const [infoImage, setInfoImage] = useState<string | null>(null);
+  const [previousSetsByExercise, setPreviousSetsByExercise] = useState<
+    Record<number, LastSet[]>
+  >({});
   const router = useRouter();
+  const { showToast } = useToast();
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
 
-  // ── Search ──────────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Search Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   async function searchExercise(index: number, term: string) {
     if (term.length < 3) {
       setSearchResults((prev) => {
@@ -104,6 +123,22 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
   const debouncedSearch = useDebouncedCallback(searchExercise, 400);
 
+  async function loadPreviousSets(index: number, exerciseName: string) {
+    const name = exerciseName.trim();
+    if (!name) return;
+    try {
+      const data = await fetchJson<{ sets: LastSet[] }>(
+        `/api/workouts/last-sets?exercise=${encodeURIComponent(name)}`,
+      );
+      setPreviousSetsByExercise((prev) => ({
+        ...prev,
+        [index]: data.sets ?? [],
+      }));
+    } catch {
+      setPreviousSetsByExercise((prev) => ({ ...prev, [index]: [] }));
+    }
+  }
+
   function selectExercise(index: number, result: ExerciseResult) {
     setExercises((prev) =>
       prev.map((e, i) =>
@@ -125,9 +160,10 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
       n[index] = [];
       return n;
     });
+    void loadPreviousSets(index, result.name);
   }
 
-  // ── Exercise CRUD ────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Exercise CRUD Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function addExercise() {
     setExercises((prev) => [...prev, emptyExercise()]);
     setSearchResults((prev) => [...prev, []]);
@@ -138,6 +174,15 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
     setExercises((prev) => prev.filter((_, i) => i !== index));
     setSearchResults((prev) => prev.filter((_, i) => i !== index));
     setSearching((prev) => prev.filter((_, i) => i !== index));
+    setPreviousSetsByExercise((prev) => {
+      const next: Record<number, LastSet[]> = {};
+      Object.entries(prev).forEach(([k, value]) => {
+        const i = Number(k);
+        if (i < index) next[i] = value;
+        if (i > index) next[i - 1] = value;
+      });
+      return next;
+    });
   }
 
   function updateExerciseName(index: number, value: string) {
@@ -154,9 +199,16 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
           : e,
       ),
     );
+    setPreviousSetsByExercise((prev) => ({ ...prev, [index]: [] }));
   }
 
-  // ── Set CRUD ─────────────────────────────────────────
+  useEffect(() => {
+    if (!initialExerciseName.trim()) return;
+    void loadPreviousSets(0, initialExerciseName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Set CRUD Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function addSet(exIndex: number) {
     setExercises((prev) =>
       prev.map((e, i) =>
@@ -210,7 +262,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
     );
   }
 
-  // ── Info Modal ───────────────────────────────────────
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Info Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function openInfo(exercise: Exercise) {
     if (!exercise.exerciseId) return;
     setInfoModal({
@@ -229,22 +281,87 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
     setInfoImage(null);
   }
 
-  // ── Submit ───────────────────────────────────────────
+  useEffect(() => {
+    if (infoModal) {
+      // store previously focused element
+      previouslyFocused.current = document.activeElement as HTMLElement | null;
+
+      // focus the modal container when it's available
+      const timer = setTimeout(() => {
+        if (modalRef.current) modalRef.current.focus();
+      }, 0);
+
+      function onKeyDown(e: KeyboardEvent) {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeInfo();
+          return;
+        }
+
+        if (e.key !== "Tab") return;
+        const container = modalRef.current;
+        if (!container) return;
+        const focusable = Array.from(
+          container.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+          ),
+        ).filter((el) => !el.hasAttribute("disabled"));
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+
+      document.addEventListener("keydown", onKeyDown);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("keydown", onKeyDown);
+      };
+    } else {
+      // restore focus
+      if (previouslyFocused.current) {
+        try {
+          previouslyFocused.current.focus();
+        } catch {}
+        previouslyFocused.current = null;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [infoModal]);
+
+  function formatPreviousSet(index: number, setIndex: number) {
+    const previous = previousSetsByExercise[index]?.[setIndex];
+    if (!previous) return "—";
+    return `${previous.weight_kg}×${previous.reps}`;
+  }
+
+  // Ã¢â€â‚¬Ã¢â€â‚¬ Submit Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   async function handleSubmit() {
     if (loading) return;
     setLoading(true);
-    setError("");
 
     const invalid = exercises.some((e) => !e.name.trim());
     if (invalid) {
-      setError("All exercises must have a name.");
+      const msg = "All exercises must have a name.";
+      showToast(msg, "error");
       setLoading(false);
       return;
     }
 
     const noSets = exercises.some((e) => e.sets.length === 0);
     if (noSets) {
-      setError("Each exercise must have at least one set.");
+      const msg = "Each exercise must have at least one set.";
+      showToast(msg, "error");
       setLoading(false);
       return;
     }
@@ -258,13 +375,14 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
       router.push("/dashboard?saved=workout");
       router.refresh();
+      showToast("Workout saved.", "success");
     } catch (err) {
       if (err instanceof FetchJsonError) {
-        setError(err.message);
+        showToast(err.message, "error");
       } else {
-        setError(
-          "Unable to save workout. Check your connection and try again.",
-        );
+        const msg =
+          "Unable to save workout. Check your connection and try again.";
+        showToast(msg, "error");
       }
     } finally {
       setLoading(false);
@@ -302,7 +420,11 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
             <div className="px-4 pt-4 pb-2">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
+                  <label htmlFor={`exercise-${exIndex}`} className="sr-only">
+                    Exercise name
+                  </label>
                   <input
+                    id={`exercise-${exIndex}`}
                     type="text"
                     placeholder="Search exercise..."
                     value={exercise.name}
@@ -327,7 +449,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                               {result.name}
                             </p>
                             <p className="text-xs text-gray-400 capitalize">
-                              {result.bodyPart} · {result.equipment}
+                              {result.bodyPart} Ã‚Â· {result.equipment}
                             </p>
                           </div>
                         </div>
@@ -336,7 +458,10 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                   )}
 
                   {searching[exIndex] && (
-                    <p className="text-xs text-gray-400 mt-0.5">Searching...</p>
+                    <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-400">
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
+                      Searching...
+                    </p>
                   )}
                 </div>
 
@@ -344,6 +469,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                 {exercise.exerciseId && (
                   <button
                     onClick={() => openInfo(exercise)}
+                    aria-label={`Open exercise info for ${exercise.name}`}
                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors flex-shrink-0"
                   >
                     <svg
@@ -368,6 +494,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                 {exercises.length > 1 && (
                   <button
                     onClick={() => removeExercise(exIndex)}
+                    aria-label="Remove exercise"
                     className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors flex-shrink-0"
                   >
                     <svg
@@ -402,7 +529,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
             </div>
 
             {/* Sets table header */}
-            <div className="grid grid-cols-12 gap-1 px-4 py-2 bg-gray-50 border-t border-gray-100">
+            <div className="hidden sm:grid grid-cols-12 gap-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
               <div className="col-span-1 text-xs font-medium text-gray-400 text-center">
                 Set
               </div>
@@ -416,108 +543,217 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
                 Reps
               </div>
               <div className="col-span-2 text-xs font-medium text-gray-400 text-center">
-                ✓
+                Ã¢Å“â€œ
               </div>
             </div>
 
             {/* Sets */}
             {exercise.sets.map((set, setIndex) => (
-              <div
-                key={setIndex}
-                className={`grid grid-cols-12 gap-1 px-4 py-2 items-center border-t border-gray-50 ${set.completed ? "bg-green-50" : ""}`}
-              >
-                {/* Set number */}
-                <div className="col-span-1 flex items-center justify-center">
-                  <span
-                    className={`text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
-                  >
-                    {setIndex + 1}
-                  </span>
-                </div>
-
-                {/* Previous (placeholder) */}
-                <div className="col-span-3 text-center">
-                  <span className="text-xs text-gray-300">—</span>
-                </div>
-
-                {/* Weight */}
-                <div className="col-span-3">
-                  <input
-                    type="number"
-                    value={set.weight_kg}
-                    min={0}
-                    step={0.5}
-                    onChange={(e) =>
-                      updateSet(
-                        exIndex,
-                        setIndex,
-                        "weight_kg",
-                        parseFloat(e.target.value),
-                      )
-                    }
-                    className={`w-full text-center text-sm font-medium border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "bg-green-100 border-green-200 text-green-800" : "bg-white text-gray-800"}`}
-                  />
-                </div>
-
-                {/* Reps */}
-                <div className="col-span-3">
-                  <input
-                    type="number"
-                    value={set.reps}
-                    min={0}
-                    onChange={(e) =>
-                      updateSet(
-                        exIndex,
-                        setIndex,
-                        "reps",
-                        parseInt(e.target.value),
-                      )
-                    }
-                    className={`w-full text-center text-sm font-medium border border-gray-200 rounded-lg py-1.5 focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "bg-green-100 border-green-200 text-green-800" : "bg-white text-gray-800"}`}
-                  />
-                </div>
-
-                {/* Complete toggle + remove */}
-                <div className="col-span-2 flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => toggleSet(exIndex, setIndex)}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+              <div key={setIndex} className="border-t border-gray-50">
+                <div
+                  className={`hidden grid-cols-6 gap-2 px-3 py-2 sm:grid sm:grid-cols-12 sm:gap-1 sm:px-4 ${set.completed ? "bg-green-50" : ""}`}
+                >
+                  <div className="col-span-1 flex items-center justify-center">
+                    <span
+                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
                     >
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => removeSet(exIndex, setIndex)}
-                    disabled={exercise.sets.length <= 1}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-red-50 text-red-400 hover:bg-red-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                    aria-label="Remove set"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      {setIndex + 1}
+                    </span>
+                  </div>
+
+                  <div className="col-span-3 text-center">
+                    <span className="text-xs text-gray-400">
+                      {formatPreviousSet(exIndex, setIndex)}
+                    </span>
+                  </div>
+
+                  <div className="col-span-3">
+                    <input
+                      aria-label={`Set ${setIndex + 1} weight in kilograms`}
+                      type="number"
+                      value={set.weight_kg}
+                      min={0}
+                      step={0.5}
+                      onChange={(e) =>
+                        updateSet(
+                          exIndex,
+                          setIndex,
+                          "weight_kg",
+                          parseFloat(e.target.value),
+                        )
+                      }
+                      className={`w-full rounded-lg border border-gray-200 py-1.5 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                    />
+                  </div>
+
+                  <div className="col-span-3">
+                    <input
+                      aria-label={`Set ${setIndex + 1} reps`}
+                      type="number"
+                      value={set.reps}
+                      min={0}
+                      onChange={(e) =>
+                        updateSet(
+                          exIndex,
+                          setIndex,
+                          "reps",
+                          parseInt(e.target.value),
+                        )
+                      }
+                      className={`w-full rounded-lg border border-gray-200 py-1.5 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                    />
+                  </div>
+
+                  <div className="col-span-2 flex items-center justify-center gap-1 sm:gap-2">
+                    <button
+                      onClick={() => toggleSet(exIndex, setIndex)}
+                      aria-label={`Mark set ${setIndex + 1} as ${set.completed ? "not completed" : "completed"}`}
+                      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
                     >
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                      <line x1="6" y1="18" x2="18" y2="6" />
-                    </svg>
-                  </button>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => removeSet(exIndex, setIndex)}
+                      disabled={exercise.sets.length <= 1}
+                      aria-label="Remove set"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                        <line x1="6" y1="18" x2="18" y2="6" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  className={`space-y-2 px-3 py-3 sm:hidden ${set.completed ? "bg-green-50" : "bg-white"}`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
+                      >
+                        {setIndex + 1}
+                      </span>
+                      <div>
+                        <p className="text-xs font-medium text-gray-500">
+                          Previous
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {formatPreviousSet(exIndex, setIndex)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => toggleSet(exIndex, setIndex)}
+                        aria-label={`Mark set ${setIndex + 1} as ${set.completed ? "not completed" : "completed"}`}
+                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => removeSet(exIndex, setIndex)}
+                        disabled={exercise.sets.length <= 1}
+                        aria-label="Remove set"
+                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <line x1="6" y1="6" x2="18" y2="18" />
+                          <line x1="6" y1="18" x2="18" y2="6" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-gray-400">
+                        kg
+                      </label>
+                      <input
+                        aria-label={`Set ${setIndex + 1} weight in kilograms`}
+                        type="number"
+                        value={set.weight_kg}
+                        min={0}
+                        step={0.5}
+                        onChange={(e) =>
+                          updateSet(
+                            exIndex,
+                            setIndex,
+                            "weight_kg",
+                            parseFloat(e.target.value),
+                          )
+                        }
+                        className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[11px] font-medium text-gray-400">
+                        Reps
+                      </label>
+                      <input
+                        aria-label={`Set ${setIndex + 1} reps`}
+                        type="number"
+                        value={set.reps}
+                        min={0}
+                        onChange={(e) =>
+                          updateSet(
+                            exIndex,
+                            setIndex,
+                            "reps",
+                            parseInt(e.target.value),
+                          )
+                        }
+                        className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             ))}
@@ -526,6 +762,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
             <div className="px-4 pb-4 pt-2">
               <button
                 onClick={() => addSet(exIndex)}
+                aria-label={`Add set to ${exercise.name || "exercise"}`}
                 className="w-full py-2 text-xs font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-lg border border-dashed border-gray-200 transition-colors"
               >
                 + Add Set
@@ -537,6 +774,7 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
         {/* Add exercise */}
         <button
           onClick={addExercise}
+          aria-label="Add exercise"
           className="w-full py-3 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors bg-white"
         >
           + Add Exercise
@@ -544,29 +782,21 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
 
         {/* Notes */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="workout-notes"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Notes (optional)
           </label>
           <textarea
+            id="workout-notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="How did the session feel?"
-            className="w-full text-sm text-gray-800 placeholder-gray-400 resize-none outline-none"
+            className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 outline-none"
           />
         </div>
-
-        {/* Error */}
-        {error && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm"
-          >
-            {error}
-          </div>
-        )}
-
         <div className="h-4" />
       </div>
 
@@ -575,8 +805,17 @@ export default function LogWorkoutForm({ gymId }: { gymId: string }) {
         <div
           className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center"
           onClick={closeInfo}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") closeInfo();
+          }}
+          tabIndex={-1}
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Exercise info: ${infoModal.name}`}
         >
           <div
+            ref={modalRef}
+            tabIndex={-1}
             className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >

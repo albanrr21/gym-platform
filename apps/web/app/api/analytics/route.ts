@@ -96,31 +96,38 @@ export async function GET() {
     .slice(0, 5)
     .map(([name, volume]) => ({ name, volume: Math.round(volume) }));
 
-  // Workouts per week (last 8 weeks)
+  // Workouts per week (last 8 weeks) using one query + JS grouping
   const now = new Date();
-  const weeksData: { week: string; count: number }[] = [];
+  const last56DaysIso = new Date(Date.now() - 56 * 86400_000).toISOString();
+  const { data: allWorkouts } = await supabase
+    .from("workouts")
+    .select("logged_at")
+    .eq("user_id", user.id)
+    .gte("logged_at", last56DaysIso);
 
+  const workoutDates = (allWorkouts ?? [])
+    .map((w) => w.logged_at)
+    .filter((d): d is string => Boolean(d))
+    .map((d) => new Date(d).getTime());
+
+  const weeksData: { week: string; count: number }[] = [];
   for (let i = 7; i >= 0; i--) {
     const weekStart = new Date(now);
     weekStart.setDate(now.getDate() - i * 7);
     weekStart.setHours(0, 0, 0, 0);
+    const weekStartMs = weekStart.getTime();
+    const weekEndMs = weekStartMs + 7 * 86400_000;
 
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 7);
-
-    const { count } = await supabase
-      .from("workouts")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", user.id)
-      .gte("logged_at", weekStart.toISOString())
-      .lt("logged_at", weekEnd.toISOString());
+    const count = workoutDates.filter(
+      (t) => t >= weekStartMs && t < weekEndMs,
+    ).length;
 
     weeksData.push({
       week: weekStart.toLocaleDateString("en-GB", {
         day: "numeric",
         month: "short",
       }),
-      count: count || 0,
+      count,
     });
   }
 

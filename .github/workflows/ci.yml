@@ -1,6 +1,8 @@
 name: CI
 
 on:
+  push:
+    branches: [main, master]
   pull_request:
     branches: [main, develop]
 
@@ -11,23 +13,26 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
         with:
           version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint code
-        run: pnpm lint
+      - name: Lint
+        run: pnpm -w -s lint
 
-      - name: Type-check code
-        run: pnpm type-check
+      - name: Type check
+        run: pnpm -w -s type-check
 
       - name: Run tests
-        run: pnpm test
+        run: pnpm -w -s test

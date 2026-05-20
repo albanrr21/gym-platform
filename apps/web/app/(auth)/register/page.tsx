@@ -1,8 +1,15 @@
 import { getGym } from "@/lib/gym/getGym";
 import RegisterForm from "./RegisterForm";
+import { headers } from "next/headers";
+import { getSubdomainFromHost } from "@/lib/tenancy/subdomain";
 
 export default async function RegisterPage() {
   const gym = await getGym();
+
+  // Debug info: show what host and subdomain we detect when no gym is found.
+  const hdrs = await headers();
+  const host = hdrs.get("x-forwarded-host") ?? hdrs.get("host") ?? "";
+  const detectedSubdomain = getSubdomainFromHost(host);
 
   if (!gym) {
     return (
@@ -26,6 +33,15 @@ export default async function RegisterPage() {
           <p className="text-sm text-gray-500">
             If you want main-domain registration, we can add a dedicated flow.
           </p>
+          <div className="mt-4 text-xs text-gray-500">
+            <div>
+              Debug: host: <span className="font-medium">{host}</span>
+            </div>
+            <div>
+              Debug: detected subdomain:{" "}
+              <span className="font-medium">{String(detectedSubdomain)}</span>
+            </div>
+          </div>
         </div>
       </div>
     );

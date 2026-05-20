@@ -1,7 +1,6 @@
 ﻿import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
-import LogoutButton from "./LogoutButton";
 import Link from "next/link";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -9,10 +8,16 @@ type SearchParams = Record<string, string | string[] | undefined>;
 type WorkoutExercisePreview = {
   id: string;
   name: string;
-  sets: number;
-  reps: number;
-  weight_kg: number;
-  rpe: number | null;
+  sets:
+    | {
+        id: string;
+        set_number: number | null;
+        weight_kg: number | null;
+        reps: number | null;
+        rpe: number | null;
+        completed: boolean | null;
+      }[]
+    | null;
 };
 
 function coerceExercises(value: unknown): WorkoutExercisePreview[] {
@@ -48,7 +53,11 @@ export default async function DashboardPage({
       id,
       notes,
       logged_at,
-      exercises ( id, name, sets, reps, weight_kg, rpe )
+      exercises (
+        id,
+        name,
+        sets ( id, set_number, weight_kg, reps, rpe, completed )
+      )
     `,
     )
     .eq("user_id", user.id)
@@ -60,8 +69,8 @@ export default async function DashboardPage({
   const saved = typeof savedParam === "string" ? savedParam : null;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto">
+    <div className="p-6">
+      <div className="mx-auto max-w-2xl">
         {saved === "workout" && (
           <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 flex items-center justify-between gap-4">
             <p className="text-sm font-medium">Workout saved.</p>
@@ -74,22 +83,19 @@ export default async function DashboardPage({
           </div>
         )}
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-8 flex items-center justify-between">
           <div>
             <p className="text-sm text-gray-500">{gym.name}</p>
             <h1 className="text-2xl font-semibold text-gray-900">
               Welcome, {profile?.full_name ?? user.email}
             </h1>
           </div>
-          <div className="flex items-center gap-3">
-            <LogoutButton />
-            <Link
-              href="/dashboard/log"
-              className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
-            >
-              + Log Workout
-            </Link>
-          </div>
+          <Link
+            href="/dashboard/log"
+            className="px-4 py-2 bg-black text-white text-sm font-medium rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            + Log Workout
+          </Link>
         </div>
         {/* Quick links */}
         <div className="flex gap-2 mb-6">
@@ -134,9 +140,10 @@ export default async function DashboardPage({
                 const exercises = coerceExercises(workout.exercises);
 
                 return (
-                  <div
+                  <Link
                     key={workout.id}
-                    className="bg-white border border-gray-200 rounded-xl p-4"
+                    href={`/dashboard/workouts/${workout.id}`}
+                    className="block rounded-xl border border-gray-200 bg-white p-4 hover:bg-gray-50"
                   >
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-gray-900">
@@ -156,14 +163,28 @@ export default async function DashboardPage({
                     </div>
 
                     <div className="flex flex-wrap gap-1.5">
-                      {exercises.map((ex) => (
-                        <span
-                          key={ex.id}
-                          className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
-                        >
-                          {ex.name} — {ex.sets}×{ex.reps} @ {ex.weight_kg}kg
-                        </span>
-                      ))}
+                      {exercises.map((ex) => {
+                        const sets = Array.isArray(ex.sets)
+                          ? ex.sets.filter((set) => set.completed !== false)
+                          : [];
+                        const bestWeight = sets.reduce(
+                          (max, set) => Math.max(max, set.weight_kg ?? 0),
+                          0,
+                        );
+                        const topReps = sets.reduce(
+                          (max, set) => Math.max(max, set.reps ?? 0),
+                          0,
+                        );
+
+                        return (
+                          <span
+                            key={ex.id}
+                            className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full"
+                          >
+                            {ex.name} — {sets.length}×{topReps} @ {bestWeight}kg
+                          </span>
+                        );
+                      })}
                     </div>
 
                     {workout.notes && (
@@ -171,7 +192,7 @@ export default async function DashboardPage({
                         {workout.notes}
                       </p>
                     )}
-                  </div>
+                  </Link>
                 );
               })}
             </div>

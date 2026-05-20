@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
 import AIReportClient from "./AIReportClient";
+import { Suspense } from "react";
+import AIReportSkeleton from "./AIReportSkeleton";
 
 export default async function AIReportPage() {
   const supabase = await createClient();
@@ -13,5 +15,9 @@ export default async function AIReportPage() {
   const gym = await getGym();
   if (!gym) redirect("/login");
 
-  return <AIReportClient />;
+  return (
+    <Suspense fallback={<AIReportSkeleton />}>
+      <AIReportClient />
+    </Suspense>
+  );
 }

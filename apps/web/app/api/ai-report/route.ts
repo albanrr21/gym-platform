@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
 import { aggregateWorkoutData } from "@/lib/ai/aggregateWorkoutData";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function POST() {
   const supabase = await createClient();
@@ -10,6 +11,19 @@ export async function POST() {
   } = await supabase.auth.getUser();
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!checkRateLimit(`ai-report:${user.id}`, 3, 60 * 60_000)) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded. Try again later." },
+      { status: 429 },
+    );
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json(
+      { error: "OPENAI_API_KEY is not set" },
+      { status: 500 },
+    );
+  }
 
   const { data: profile } = await supabase
     .from("users")
@@ -21,7 +35,6 @@ export async function POST() {
     return NextResponse.json({ error: "No gym found" }, { status: 400 });
   }
 
-  // Aggregate workout data
   const workoutData = await aggregateWorkoutData(user.id);
 
   if (!workoutData) {
@@ -73,28 +86,46 @@ Return ONLY a valid JSON object with this exact structure, no markdown, no expla
 `;
 
   try {
-    const completion = await openai.chat.completions.create({
+    const stream = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       max_tokens: 800,
       temperature: 0.3,
+      stream: true,
     });
 
-    const rawResponse = completion.choices[0].message.content || "";
+    const encoder = new TextEncoder();
+    let fullText = "";
 
-    // Parse JSON — strip any markdown fences if present
-    const clean = rawResponse.replace(/```json|```/g, "").trim();
-    const report = JSON.parse(clean);
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of stream) {
+              const token = chunk.choices[0]?.delta?.content ?? "";
+              if (!token) continue;
+              fullText += token;
+              controller.enqueue(encoder.encode(token));
+            }
 
-    // Store in ai_reports table
-    await supabase.from("ai_reports").insert({
-      user_id: user.id,
-      gym_id: profile.gym_id,
-      report_type: "weekly_summary",
-      payload: report,
-    });
+            const clean = fullText.replace(/```json|```/g, "").trim();
+            const report = JSON.parse(clean);
 
-    return NextResponse.json({ report });
+            await supabase.from("ai_reports").insert({
+              user_id: user.id,
+              gym_id: profile.gym_id,
+              report_type: "weekly_summary",
+              payload: report,
+            });
+
+            controller.close();
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+      }),
+      { headers: { "Content-Type": "text/plain; charset=utf-8" } },
+    );
   } catch (error) {
     console.error("AI report error:", error);
     return NextResponse.json(
@@ -112,7 +143,6 @@ export async function GET() {
   if (!user)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Get most recent report
   const { data: report } = await supabase
     .from("ai_reports")
     .select("*")
