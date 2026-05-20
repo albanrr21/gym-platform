@@ -26,6 +26,6 @@ export default async function WorkoutDetailPage({
 
   if (!workout) redirect("/dashboard");
 
-  // @ts-ignore - The types from supabase might need some casting to match WorkoutDetail props
+
   return <WorkoutDetail workout={workout} />;
 }

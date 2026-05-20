@@ -336,7 +336,6 @@ export default function LogWorkoutForm({
         previouslyFocused.current = null;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [infoModal]);
 
   function formatPreviousSet(index: number, setIndex: number) {
@@ -836,6 +835,7 @@ export default function LogWorkoutForm({
             {/* GIF */}
             <div className="flex justify-center bg-gray-50 py-5">
               {infoImage ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={infoImage}
                   alt={infoModal.name}

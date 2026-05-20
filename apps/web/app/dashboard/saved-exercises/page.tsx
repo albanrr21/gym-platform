@@ -37,6 +37,7 @@ export default function SavedExercisesPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function toggleSave(item: SavedExerciseItem) {

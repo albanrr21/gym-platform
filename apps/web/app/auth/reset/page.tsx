@@ -40,6 +40,7 @@ export default function ResetPasswordPage() {
     }
 
     bootstrapFromHash();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase.auth]);
 
   async function submit() {

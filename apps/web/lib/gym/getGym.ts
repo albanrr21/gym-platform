@@ -10,26 +10,7 @@ export async function getGym() {
     headersList.get("x-forwarded-host") ?? headersList.get("host") ?? "";
   const subdomain = headerSubdomain ?? getSubdomainFromHost(host);
 
-  // Diagnostic logging for debugging tenant resolution / DB lookups.
-  try {
-    console.log("getGym: headerSubdomain=", headerSubdomain);
-    console.log("getGym: host=", host);
-    console.log("getGym: detected subdomain=", subdomain);
-    console.log(
-      "getGym: NEXT_PUBLIC_SUPABASE_URL present=",
-      Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    );
-    console.log(
-      "getGym: NEXT_PUBLIC_SUPABASE_ANON_KEY present=",
-      Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-    );
-    console.log(
-      "getGym: SUPABASE_SERVICE_ROLE_KEY present=",
-      Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
-    );
-  } catch (e) {
-    // ignore logging errors
-  }
+
 
   if (!subdomain) return null;
 
@@ -51,7 +32,7 @@ export async function getGym() {
             ? JSON.stringify(error, Object.getOwnPropertyNames(error))
             : String(error);
         console.error("getGym: supabase error=", serialized);
-      } catch (serErr) {
+      } catch {
         console.error(
           "getGym: supabase error (inspect)=",
           util.inspect(error, { depth: null }),
@@ -61,11 +42,9 @@ export async function getGym() {
     }
 
     if (!gym) {
-      console.log("getGym: no gym row found for subdomain=", subdomain);
       return null;
     }
 
-    console.log("getGym: found gym id=", gym.id);
     return gym;
   } catch (err) {
     try {
@@ -74,7 +53,7 @@ export async function getGym() {
           ? JSON.stringify(err, Object.getOwnPropertyNames(err))
           : String(err);
       console.error("getGym: exception while querying supabase=", serialized);
-    } catch (serErr) {
+    } catch {
       console.error(
         "getGym: exception while querying supabase (inspect)=",
         util.inspect(err, { depth: null }),

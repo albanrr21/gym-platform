@@ -129,6 +129,8 @@ export default function LeaderboardClient() {
   }
 
   useEffect(() => {
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadLeaderboard(false);
     const timer = setInterval(() => {
       loadLeaderboard(true);
