@@ -5,3 +5,6 @@ Idea.md
 walkthrough.md
 Implement-Plan.md
 supabase
+.turbo
+dist
+.idea
