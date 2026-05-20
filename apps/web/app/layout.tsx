@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthContext";
-import { validateEnv } from "@/lib/env";
+import { validatePublicEnv } from "@/lib/env";
 import { ToastProvider } from "@/components/ui/Toast";
 
 const geistSans = Geist({
@@ -26,7 +26,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  validateEnv();
+  validatePublicEnv();
 
   return (
     <html lang="en">
