@@ -25,23 +25,11 @@ export default async function RegisterPage() {
             Example:{" "}
             <a
               className="text-black font-medium hover:underline"
-              href="http://elite.localhost:3000/register"
+              href="http://elite.alban-rrahmani.me/register"
             >
-              elite.localhost:3000/register
+              elite.alban-rrahmani.me/register
             </a>
           </p>
-          <p className="text-sm text-gray-500">
-            If you want main-domain registration, we can add a dedicated flow.
-          </p>
-          <div className="mt-4 text-xs text-gray-500">
-            <div>
-              Debug: host: <span className="font-medium">{host}</span>
-            </div>
-            <div>
-              Debug: detected subdomain:{" "}
-              <span className="font-medium">{String(detectedSubdomain)}</span>
-            </div>
-          </div>
         </div>
       </div>
     );
