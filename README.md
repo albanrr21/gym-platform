@@ -65,8 +65,17 @@ See the [System Architecture Diagram](docs/architecture.html) for an overview of
 - **Live URL:** `https://alban-rrahmani.me/login`
 - **Tenant URL:** `https://elite.alban-rrahmani.me/dashboard`
 
+## CI secrets
+
+GitHub Actions expects these repository secrets:
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `OPENAI_API_KEY`
+- `RAPIDAPI_KEY`
+- `ROOT_DOMAIN`
+
 ## Test Credentials
 
-For academic submission or testing purposes:
-- **Email:** `albanrr9@gmail.com`
-- **Password:** *(Please contact the author for the test password or register a new account)*
+For academic submission or testing, use an account provisioned in Supabase or register a new tenant user locally.

@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -22,6 +23,8 @@ vi.mock("next/navigation", () => ({
 describe("LogWorkoutForm", () => {
   afterEach(() => {
     cleanup();
+    vi.clearAllMocks();
+    vi.useRealTimers();
   });
 
   function renderForm() {
@@ -133,5 +136,108 @@ describe("LogWorkoutForm", () => {
     });
 
     resolveRequest();
+  });
+
+  it("starts a rest timer when a set is marked complete", () => {
+    vi.useFakeTimers();
+
+    renderForm();
+    fireEvent.click(screen.getAllByLabelText(/Mark set 1 as completed/i)[0]);
+
+    expect(screen.getByText("Rest between sets")).toBeInTheDocument();
+    expect(screen.getByText("1:30")).toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+
+    expect(screen.getByText("1:29")).toBeInTheDocument();
+  });
+
+  it("saves the workout setup as a template", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    renderForm();
+
+    fireEvent.change(screen.getAllByPlaceholderText("Search exercise...")[0], {
+      target: { value: "Bench Press" },
+    });
+    fireEvent.change(screen.getByLabelText(/template name/i), {
+      target: { value: "Push day" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save template/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workout-templates",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+  });
+
+  it("saves only workout history when finishing with a template name", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ workout: { id: "workout-1" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    renderForm();
+
+    fireEvent.change(screen.getAllByPlaceholderText("Search exercise...")[0], {
+      target: { value: "Bench Press" },
+    });
+    fireEvent.change(screen.getByLabelText(/template name/i), {
+      target: { value: "Push day" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Finish" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workouts",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+
+    expect(router.push).toHaveBeenCalledWith("/dashboard?saved=workout");
+  });
+
+  it("does not save workout history when saving a template", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    renderForm();
+
+    fireEvent.change(screen.getAllByPlaceholderText("Search exercise...")[0], {
+      target: { value: "Bench Press" },
+    });
+    fireEvent.change(screen.getByLabelText(/template name/i), {
+      target: { value: "Push day" },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /save template/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/workout-templates",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
   });
 });

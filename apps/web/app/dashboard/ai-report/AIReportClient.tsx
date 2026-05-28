@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { fetchJson } from "@/lib/http/fetchJson";
 import { useToast } from "@/components/ui/Toast";
+import AIReportSkeleton from "./AIReportSkeleton";
 
 interface FatigueReport {
   status: "ok" | "at_risk" | "high";
@@ -178,11 +179,7 @@ export default function AIReportClient() {
       {/* Errors are surfaced via toasts */}
 
       {/* Loading state */}
-      {fetching && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
-        </div>
-      )}
+      {fetching && <AIReportSkeleton />}
 
       {loading && streamedText && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -242,7 +239,7 @@ export default function AIReportClient() {
             </div>
             <div className="rounded-lg bg-gray-50 p-3">
               <p className="text-xs leading-relaxed text-gray-500">
-                ✦ {report.weekly_summary.highlight}
+                * {report.weekly_summary.highlight}
               </p>
             </div>
           </div>
@@ -325,9 +322,9 @@ export default function AIReportClient() {
                 Progression Suggestions
               </h2>
               <div className="space-y-3">
-                {report.progression.map((item, i) => (
+                {report.progression.map((item) => (
                   <div
-                    key={i}
+                    key={item.exercise}
                     className="border border-gray-100 rounded-lg p-3"
                   >
                     <div className="flex items-center justify-between mb-1">

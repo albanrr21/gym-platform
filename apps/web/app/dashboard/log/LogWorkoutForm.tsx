@@ -5,23 +5,7 @@ import { useRouter } from "next/navigation";
 import { useDebouncedCallback } from "use-debounce";
 import { fetchJson, FetchJsonError } from "@/lib/http/fetchJson";
 import { useToast } from "@/components/ui/Toast";
-
-interface ExerciseSet {
-  weight_kg: number;
-  reps: number;
-  rpe: number;
-  completed: boolean;
-}
-
-interface Exercise {
-  name: string;
-  exerciseId?: string;
-  bodyPart?: string;
-  equipment?: string;
-  secondaryMuscles?: string[];
-  instructions?: string[];
-  sets: ExerciseSet[];
-}
+import type { WorkoutExerciseData, WorkoutSetData } from "@/lib/workout/types";
 
 interface ExerciseResult {
   id: string;
@@ -46,34 +30,109 @@ interface LastSet {
   reps: number;
 }
 
-const emptySet = (): ExerciseSet => ({
+type RestTimerKind = "set" | "exercise";
+
+type RestTimerState = {
+  kind: RestTimerKind;
+  label: string;
+  secondsRemaining: number;
+};
+
+let localIdCounter = 0;
+
+function createLocalId(prefix: string) {
+  localIdCounter += 1;
+  return `${prefix}-${Date.now()}-${localIdCounter}`;
+}
+
+const emptySet = (): WorkoutSetData => ({
+  clientId: createLocalId("set"),
   weight_kg: 0,
   reps: 10,
   rpe: 7,
   completed: false,
 });
 
-const emptyExercise = (): Exercise => ({
-  name: "",
+const emptyExercise = (name = ""): WorkoutExerciseData => ({
+  clientId: createLocalId("exercise"),
+  name,
   sets: [emptySet(), emptySet(), emptySet()],
 });
+
+function normalizeExerciseForState(
+  exercise: WorkoutExerciseData,
+): WorkoutExerciseData {
+  return {
+    ...exercise,
+    clientId: exercise.clientId ?? createLocalId("exercise"),
+    sets:
+      exercise.sets.length > 0
+        ? exercise.sets.map((set) => ({
+            clientId: set.clientId ?? createLocalId("set"),
+            weight_kg: Number.isFinite(set.weight_kg) ? set.weight_kg : 0,
+            reps: Number.isFinite(set.reps) ? set.reps : 10,
+            rpe:
+              typeof set.rpe === "number" && Number.isFinite(set.rpe)
+                ? set.rpe
+                : 7,
+            completed: Boolean(set.completed),
+          }))
+        : [emptySet()],
+  };
+}
+
+function formatRestTime(totalSeconds: number) {
+  const safeSeconds = Math.max(0, totalSeconds);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 export default function LogWorkoutForm({
   gymId,
   initialExerciseName = "",
+  initialExercises,
+  initialNotes = "",
+  initialTemplateName = "",
+  initialSetRestSeconds = 90,
+  initialExerciseRestSeconds = 180,
 }: {
   gymId: string;
   initialExerciseName?: string;
+  initialExercises?: WorkoutExerciseData[];
+  initialNotes?: string;
+  initialTemplateName?: string;
+  initialSetRestSeconds?: number;
+  initialExerciseRestSeconds?: number;
 }) {
-  const [exercises, setExercises] = useState<Exercise[]>([
-    { ...emptyExercise(), name: initialExerciseName.trim() },
-  ]);
-  const [notes, setNotes] = useState("");
+  const initialExerciseList = initialExercises?.length
+    ? initialExercises.map(normalizeExerciseForState)
+    : [
+        {
+          ...emptyExercise(initialExerciseName.trim()),
+          name: initialExerciseName.trim(),
+        },
+      ];
+
+  const [exercises, setExercises] =
+    useState<WorkoutExerciseData[]>(initialExerciseList);
+  const [notes, setNotes] = useState(initialNotes);
+  const [templateName, setTemplateName] = useState(initialTemplateName);
+  const [setRestSeconds, setSetRestSeconds] = useState(initialSetRestSeconds);
+  const [exerciseRestSeconds, setExerciseRestSeconds] = useState(
+    initialExerciseRestSeconds,
+  );
   const [loading, setLoading] = useState(false);
-  const [searchResults, setSearchResults] = useState<ExerciseResult[][]>([[]]);
-  const [searching, setSearching] = useState<boolean[]>([false]);
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [searchResults, setSearchResults] = useState<ExerciseResult[][]>(
+    Array.from({ length: initialExerciseList.length }, () => []),
+  );
+  const [searching, setSearching] = useState<boolean[]>(
+    Array.from({ length: initialExerciseList.length }, () => false),
+  );
   const [infoModal, setInfoModal] = useState<InfoModal | null>(null);
   const [infoImage, setInfoImage] = useState<string | null>(null);
+  const [restTimer, setRestTimer] = useState<RestTimerState | null>(null);
   const [previousSetsByExercise, setPreviousSetsByExercise] = useState<
     Record<number, LastSet[]>
   >({});
@@ -82,41 +141,72 @@ export default function LogWorkoutForm({
   const modalRef = useRef<HTMLDivElement | null>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Search Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  function clearRestTimer() {
+    setRestTimer(null);
+  }
+
+  function startRestTimer(kind: RestTimerKind, label: string, seconds: number) {
+    if (seconds <= 0) {
+      clearRestTimer();
+      return;
+    }
+
+    setRestTimer({ kind, label, secondsRemaining: seconds });
+  }
+
+  useEffect(() => {
+    if (!restTimer) return;
+
+    const interval = window.setInterval(() => {
+      setRestTimer((current) => {
+        if (!current) return current;
+        if (current.secondsRemaining <= 1) return null;
+        return {
+          ...current,
+          secondsRemaining: current.secondsRemaining - 1,
+        };
+      });
+    }, 1000);
+
+    return () => window.clearInterval(interval);
+  }, [restTimer]);
+
   async function searchExercise(index: number, term: string) {
     if (term.length < 3) {
       setSearchResults((prev) => {
-        const n = [...prev];
-        n[index] = [];
-        return n;
+        const next = [...prev];
+        next[index] = [];
+        return next;
       });
       return;
     }
+
     setSearching((prev) => {
-      const n = [...prev];
-      n[index] = true;
-      return n;
+      const next = [...prev];
+      next[index] = true;
+      return next;
     });
+
     try {
       const data = await fetchJson<{ exercises?: ExerciseResult[] }>(
         `/api/exercises/search?name=${encodeURIComponent(term)}`,
       );
       setSearchResults((prev) => {
-        const n = [...prev];
-        n[index] = data.exercises || [];
-        return n;
+        const next = [...prev];
+        next[index] = data.exercises || [];
+        return next;
       });
     } catch {
       setSearchResults((prev) => {
-        const n = [...prev];
-        n[index] = [];
-        return n;
+        const next = [...prev];
+        next[index] = [];
+        return next;
       });
     } finally {
       setSearching((prev) => {
-        const n = [...prev];
-        n[index] = false;
-        return n;
+        const next = [...prev];
+        next[index] = false;
+        return next;
       });
     }
   }
@@ -126,6 +216,7 @@ export default function LogWorkoutForm({
   async function loadPreviousSets(index: number, exerciseName: string) {
     const name = exerciseName.trim();
     if (!name) return;
+
     try {
       const data = await fetchJson<{ sets: LastSet[] }>(
         `/api/workouts/last-sets?exercise=${encodeURIComponent(name)}`,
@@ -141,10 +232,10 @@ export default function LogWorkoutForm({
 
   function selectExercise(index: number, result: ExerciseResult) {
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === index
+      prev.map((exercise, exerciseIndex) =>
+        exerciseIndex === index
           ? {
-              ...e,
+              ...exercise,
               name: result.name,
               exerciseId: result.id,
               bodyPart: result.bodyPart,
@@ -152,18 +243,19 @@ export default function LogWorkoutForm({
               secondaryMuscles: result.secondaryMuscles,
               instructions: result.instructions,
             }
-          : e,
+          : exercise,
       ),
     );
+
     setSearchResults((prev) => {
-      const n = [...prev];
-      n[index] = [];
-      return n;
+      const next = [...prev];
+      next[index] = [];
+      return next;
     });
+
     void loadPreviousSets(index, result.name);
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Exercise CRUD Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
   function addExercise() {
     setExercises((prev) => [...prev, emptyExercise()]);
     setSearchResults((prev) => [...prev, []]);
@@ -171,15 +263,21 @@ export default function LogWorkoutForm({
   }
 
   function removeExercise(index: number) {
-    setExercises((prev) => prev.filter((_, i) => i !== index));
-    setSearchResults((prev) => prev.filter((_, i) => i !== index));
-    setSearching((prev) => prev.filter((_, i) => i !== index));
+    setExercises((prev) =>
+      prev.filter((_, exerciseIndex) => exerciseIndex !== index),
+    );
+    setSearchResults((prev) =>
+      prev.filter((_, exerciseIndex) => exerciseIndex !== index),
+    );
+    setSearching((prev) =>
+      prev.filter((_, exerciseIndex) => exerciseIndex !== index),
+    );
     setPreviousSetsByExercise((prev) => {
       const next: Record<number, LastSet[]> = {};
-      Object.entries(prev).forEach(([k, value]) => {
-        const i = Number(k);
-        if (i < index) next[i] = value;
-        if (i > index) next[i - 1] = value;
+      Object.entries(prev).forEach(([key, value]) => {
+        const exerciseIndex = Number(key);
+        if (exerciseIndex < index) next[exerciseIndex] = value;
+        if (exerciseIndex > index) next[exerciseIndex - 1] = value;
       });
       return next;
     });
@@ -187,16 +285,16 @@ export default function LogWorkoutForm({
 
   function updateExerciseName(index: number, value: string) {
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === index
+      prev.map((exercise, exerciseIndex) =>
+        exerciseIndex === index
           ? {
-              ...e,
+              ...exercise,
               name: value,
               exerciseId: undefined,
               bodyPart: undefined,
               equipment: undefined,
             }
-          : e,
+          : exercise,
       ),
     );
     setPreviousSetsByExercise((prev) => ({ ...prev, [index]: [] }));
@@ -208,62 +306,101 @@ export default function LogWorkoutForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Set CRUD Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  function addSet(exIndex: number) {
+  function addSet(exerciseIndex: number) {
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === exIndex ? { ...e, sets: [...e.sets, emptySet()] } : e,
+      prev.map((exercise, index) =>
+        index === exerciseIndex
+          ? { ...exercise, sets: [...exercise.sets, emptySet()] }
+          : exercise,
       ),
     );
   }
 
-  function removeSet(exIndex: number, setIndex: number) {
+  function removeSet(exerciseIndex: number, setIndex: number) {
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === exIndex
-          ? { ...e, sets: e.sets.filter((_, si) => si !== setIndex) }
-          : e,
+      prev.map((exercise, index) =>
+        index === exerciseIndex
+          ? {
+              ...exercise,
+              sets: exercise.sets.filter((_, current) => current !== setIndex),
+            }
+          : exercise,
       ),
     );
   }
 
   function updateSet(
-    exIndex: number,
+    exerciseIndex: number,
     setIndex: number,
-    field: keyof ExerciseSet,
+    field: keyof WorkoutSetData,
     value: number | boolean,
   ) {
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === exIndex
+      prev.map((exercise, index) =>
+        index === exerciseIndex
           ? {
-              ...e,
-              sets: e.sets.map((s, si) =>
-                si === setIndex ? { ...s, [field]: value } : s,
+              ...exercise,
+              sets: exercise.sets.map((set, current) =>
+                current === setIndex ? { ...set, [field]: value } : set,
               ),
             }
-          : e,
+          : exercise,
       ),
     );
   }
 
-  function toggleSet(exIndex: number, setIndex: number) {
+  function toggleSet(exerciseIndex: number, setIndex: number) {
+    const exercise = exercises[exerciseIndex];
+    const currentSet = exercise?.sets[setIndex];
+    if (!exercise || !currentSet) return;
+
+    const isMarkingComplete = !currentSet.completed;
+
     setExercises((prev) =>
-      prev.map((e, i) =>
-        i === exIndex
+      prev.map((item, index) =>
+        index === exerciseIndex
           ? {
-              ...e,
-              sets: e.sets.map((s, si) =>
-                si === setIndex ? { ...s, completed: !s.completed } : s,
+              ...item,
+              sets: item.sets.map((set, current) =>
+                current === setIndex
+                  ? { ...set, completed: !set.completed }
+                  : set,
               ),
             }
-          : e,
+          : item,
       ),
     );
+
+    if (!isMarkingComplete) {
+      clearRestTimer();
+      return;
+    }
+
+    const nextSet = exercise.sets[setIndex + 1];
+    const nextExercise = exercises[exerciseIndex + 1];
+
+    if (nextSet) {
+      startRestTimer(
+        "set",
+        `Next set: ${exercise.name || "exercise"} ${setIndex + 2}`,
+        setRestSeconds,
+      );
+      return;
+    }
+
+    if (nextExercise) {
+      startRestTimer(
+        "exercise",
+        `Next exercise: ${nextExercise.name || "exercise"}`,
+        exerciseRestSeconds,
+      );
+      return;
+    }
+
+    clearRestTimer();
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Info Modal Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  function openInfo(exercise: Exercise) {
+  function openInfo(exercise: WorkoutExerciseData) {
     if (!exercise.exerciseId) return;
     setInfoModal({
       name: exercise.name,
@@ -282,89 +419,72 @@ export default function LogWorkoutForm({
   }
 
   useEffect(() => {
-    if (infoModal) {
-      // store previously focused element
-      previouslyFocused.current = document.activeElement as HTMLElement | null;
-
-      // focus the modal container when it's available
-      const timer = setTimeout(() => {
-        if (modalRef.current) modalRef.current.focus();
-      }, 0);
-
-      function onKeyDown(e: KeyboardEvent) {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          closeInfo();
-          return;
-        }
-
-        if (e.key !== "Tab") return;
-        const container = modalRef.current;
-        if (!container) return;
-        const focusable = Array.from(
-          container.querySelectorAll<HTMLElement>(
-            'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
-          ),
-        ).filter((el) => !el.hasAttribute("disabled"));
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey) {
-          if (document.activeElement === first) {
-            e.preventDefault();
-            last.focus();
-          }
-        } else {
-          if (document.activeElement === last) {
-            e.preventDefault();
-            first.focus();
-          }
-        }
-      }
-
-      document.addEventListener("keydown", onKeyDown);
-      return () => {
-        clearTimeout(timer);
-        document.removeEventListener("keydown", onKeyDown);
-      };
-    } else {
-      // restore focus
+    if (!infoModal) {
       if (previouslyFocused.current) {
         try {
           previouslyFocused.current.focus();
-        } catch {}
+        } catch {
+          // ignore focus restore issues
+        }
         previouslyFocused.current = null;
       }
+      return;
     }
+
+    previouslyFocused.current = document.activeElement as HTMLElement | null;
+
+    const timer = window.setTimeout(() => {
+      modalRef.current?.focus();
+    }, 0);
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeInfo();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [infoModal]);
 
-  function formatPreviousSet(index: number, setIndex: number) {
-    const previous = previousSetsByExercise[index]?.[setIndex];
-    if (!previous) return "—";
-    return `${previous.weight_kg}×${previous.reps}`;
+  function formatPreviousSet(exerciseIndex: number, setIndex: number) {
+    const previous = previousSetsByExercise[exerciseIndex]?.[setIndex];
+    if (!previous) return "-";
+    return `${previous.weight_kg} x ${previous.reps}`;
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Submit Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-  async function handleSubmit() {
-    if (loading) return;
+  function validateWorkout() {
+    if (exercises.some((exercise) => !exercise.name.trim())) {
+      return "All exercises must have a name.";
+    }
+
+    if (exercises.some((exercise) => exercise.sets.length === 0)) {
+      return "Each exercise must have at least one set.";
+    }
+
+    return null;
+  }
+
+  async function saveWorkoutHistory({
+    showSuccessToast = true,
+    navigateAfterSave = false,
+  }: {
+    showSuccessToast?: boolean;
+    navigateAfterSave?: boolean;
+  } = {}) {
+    if (loading) return false;
+
+    const validationError = validateWorkout();
+    if (validationError) {
+      showToast(validationError, "error");
+      return false;
+    }
+
     setLoading(true);
-
-    const invalid = exercises.some((e) => !e.name.trim());
-    if (invalid) {
-      const msg = "All exercises must have a name.";
-      showToast(msg, "error");
-      setLoading(false);
-      return;
-    }
-
-    const noSets = exercises.some((e) => e.sets.length === 0);
-    if (noSets) {
-      const msg = "Each exercise must have at least one set.";
-      showToast(msg, "error");
-      setLoading(false);
-      return;
-    }
-
     try {
       await fetchJson<{ workout: { id: string } }>("/api/workouts", {
         method: "POST",
@@ -372,397 +492,390 @@ export default function LogWorkoutForm({
         body: JSON.stringify({ exercises, notes, gym_id: gymId }),
       });
 
-      router.push("/dashboard?saved=workout");
-      router.refresh();
-      showToast("Workout saved.", "success");
-    } catch (err) {
-      if (err instanceof FetchJsonError) {
-        showToast(err.message, "error");
-      } else {
-        const msg =
-          "Unable to save workout. Check your connection and try again.";
-        showToast(msg, "error");
+      clearRestTimer();
+      if (showSuccessToast) {
+        showToast("Workout saved.", "success");
       }
+
+      if (navigateAfterSave) {
+        router.push("/dashboard?saved=workout");
+        router.refresh();
+      }
+
+      return true;
+    } catch (error) {
+      if (error instanceof FetchJsonError) {
+        showToast(error.message, "error");
+      } else {
+        showToast(
+          "Unable to save workout. Check your connection and try again.",
+          "error",
+        );
+      }
+      return false;
     } finally {
       setLoading(false);
     }
   }
 
+  async function saveTemplateRecord() {
+    try {
+      await fetchJson<{ ok: boolean }>("/api/workout-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: templateName.trim(),
+          notes,
+          set_rest_seconds: setRestSeconds,
+          exercise_rest_seconds: exerciseRestSeconds,
+          exercises,
+        }),
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof FetchJsonError) {
+        showToast(error.message, "error");
+      } else {
+        showToast("Unable to save template. Try again.", "error");
+      }
+      return false;
+    }
+  }
+
+  async function handleSubmit() {
+    if (loading || savingTemplate) return;
+    const workoutSaved = await saveWorkoutHistory({
+      showSuccessToast: true,
+      navigateAfterSave: true,
+    });
+    if (!workoutSaved) return;
+  }
+
+  async function saveTemplate() {
+    if (loading || savingTemplate) return;
+
+    const validationError = validateWorkout();
+    if (validationError) {
+      showToast(validationError, "error");
+      return;
+    }
+
+    setSavingTemplate(true);
+    try {
+      const templateSaved = await saveTemplateRecord();
+      if (templateSaved) {
+        showToast("Template saved.", "success");
+      }
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Sticky header */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={() => router.back()}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Cancel
-        </button>
-        <h1 className="text-sm font-semibold text-gray-900">Log Workout</h1>
-        <button
-          onClick={handleSubmit}
-          disabled={loading}
-          className="text-sm font-semibold text-black disabled:opacity-40"
-        >
-          {loading ? "Saving..." : "Finish"}
-        </button>
+      <div className="sticky top-0 z-10 border-b border-gray-200 bg-white">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <button
+            onClick={() => router.back()}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Cancel
+          </button>
+          <h1 className="text-sm font-semibold text-gray-900">Log Workout</h1>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={saveTemplate}
+              disabled={loading || savingTemplate}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {savingTemplate ? "Saving template..." : "Save template"}
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={loading || savingTemplate}
+              className="text-sm font-semibold text-black disabled:opacity-40"
+            >
+              {loading ? "Saving..." : "Finish"}
+            </button>
+          </div>
+        </div>
+
+        {restTimer && (
+          <div className="border-t border-gray-100 bg-gray-50 px-4 py-2 text-sm text-gray-700">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="font-medium text-gray-900">
+                  {restTimer.kind === "set"
+                    ? "Rest between sets"
+                    : "Rest between exercises"}
+                </p>
+                <p className="text-xs text-gray-500">{restTimer.label}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-lg font-semibold text-gray-900">
+                  {formatRestTime(restTimer.secondsRemaining)}
+                </span>
+                <button
+                  onClick={clearRestTimer}
+                  className="rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-600 hover:bg-white"
+                >
+                  Skip
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="max-w-2xl mx-auto p-4 space-y-4">
-        {/* Exercises */}
-        {exercises.map((exercise, exIndex) => (
+      <div className="mx-auto max-w-2xl space-y-4 p-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-3">
+            <h2 className="text-sm font-semibold text-gray-900">Rest timers</h2>
+            <p className="text-xs text-gray-500">
+              Start a countdown automatically when you mark a set complete.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="rest-between-sets"
+                className="mb-1 block text-xs font-medium text-gray-500"
+              >
+                Between sets (seconds)
+              </label>
+              <input
+                id="rest-between-sets"
+                type="number"
+                min={0}
+                step={1}
+                value={setRestSeconds}
+                onChange={(event) =>
+                  setSetRestSeconds(
+                    Math.max(0, Number.parseInt(event.target.value, 10) || 0),
+                  )
+                }
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
+              />
+            </div>
+            <div>
+              <label
+                htmlFor="rest-between-exercises"
+                className="mb-1 block text-xs font-medium text-gray-500"
+              >
+                Between exercises (seconds)
+              </label>
+              <input
+                id="rest-between-exercises"
+                type="number"
+                min={0}
+                step={1}
+                value={exerciseRestSeconds}
+                onChange={(event) =>
+                  setExerciseRestSeconds(
+                    Math.max(0, Number.parseInt(event.target.value, 10) || 0),
+                  )
+                }
+                className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
+              />
+            </div>
+          </div>
+        </div>
+
+        {exercises.map((exercise, exerciseIndex) => (
           <div
-            key={exIndex}
-            className="bg-white border border-gray-200 rounded-xl"
+            key={exercise.clientId}
+            className="rounded-xl border border-gray-200 bg-white"
           >
-            {/* Exercise header */}
-            <div className="px-4 pt-4 pb-2">
-              <div className="flex items-center gap-2">
+            <div className="space-y-3 px-4 pt-4 pb-3">
+              <div className="flex items-start gap-2">
                 <div className="relative flex-1">
-                  <label htmlFor={`exercise-${exIndex}`} className="sr-only">
+                  <label
+                    htmlFor={`exercise-${exerciseIndex}`}
+                    className="sr-only"
+                  >
                     Exercise name
                   </label>
                   <input
-                    id={`exercise-${exIndex}`}
+                    id={`exercise-${exerciseIndex}`}
                     type="text"
                     placeholder="Search exercise..."
                     value={exercise.name}
-                    onChange={(e) => {
-                      updateExerciseName(exIndex, e.target.value);
-                      debouncedSearch(exIndex, e.target.value);
+                    onChange={(event) => {
+                      updateExerciseName(exerciseIndex, event.target.value);
+                      debouncedSearch(exerciseIndex, event.target.value);
                     }}
-                    className="w-full text-sm font-semibold text-blue-600 placeholder-gray-400 border-none outline-none bg-transparent"
+                    className="w-full border-none bg-transparent text-sm font-semibold text-blue-600 outline-none placeholder-gray-400"
                   />
 
-                  {/* Dropdown */}
-                  {searchResults[exIndex]?.length > 0 && (
-                    <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-64 overflow-auto">
-                      {searchResults[exIndex].map((result) => (
-                        <div
+                  {searchResults[exerciseIndex]?.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                      {searchResults[exerciseIndex].map((result) => (
+                        <button
                           key={result.id}
-                          onClick={() => selectExercise(exIndex, result)}
-                          className="flex items-center justify-between px-3 py-2.5 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-0"
+                          type="button"
+                          onClick={() => selectExercise(exerciseIndex, result)}
+                          className="flex w-full items-center justify-between border-b border-gray-100 px-3 py-2.5 text-left hover:bg-gray-50 last:border-0"
                         >
                           <div>
-                            <p className="text-sm font-medium text-gray-800 capitalize">
+                            <p className="text-sm font-medium capitalize text-gray-800">
                               {result.name}
                             </p>
-                            <p className="text-xs text-gray-400 capitalize">
-                              {result.bodyPart} Ã‚Â· {result.equipment}
+                            <p className="text-xs capitalize text-gray-400">
+                              {result.bodyPart} / {result.equipment}
                             </p>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
 
-                  {searching[exIndex] && (
-                    <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-400">
+                  {searching[exerciseIndex] && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
                       <span className="h-3 w-3 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
                       Searching...
                     </p>
                   )}
                 </div>
 
-                {/* Info button */}
-                {exercise.exerciseId && (
-                  <button
-                    onClick={() => openInfo(exercise)}
-                    aria-label={`Open exercise info for ${exercise.name}`}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100 transition-colors flex-shrink-0"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                <div className="flex items-center gap-2">
+                  {exercise.exerciseId && (
+                    <button
+                      type="button"
+                      onClick={() => openInfo(exercise)}
+                      aria-label={`Open exercise info for ${exercise.name}`}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-500 hover:bg-blue-100"
                     >
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="16" x2="12" y2="12" />
-                      <line x1="12" y1="8" x2="12.01" y2="8" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Remove exercise */}
-                {exercises.length > 1 && (
-                  <button
-                    onClick={() => removeExercise(exIndex)}
-                    aria-label="Remove exercise"
-                    className="w-7 h-7 flex items-center justify-center rounded-lg bg-red-50 text-red-400 hover:bg-red-100 transition-colors flex-shrink-0"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      <span className="text-[11px] font-bold">i</span>
+                    </button>
+                  )}
+                  {exercises.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeExercise(exerciseIndex)}
+                      aria-label="Remove exercise"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-400 hover:bg-red-100"
                     >
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
-                )}
+                      X
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {/* Tags */}
               {exercise.exerciseId && (
-                <div className="flex gap-1.5 mt-1.5">
-                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-500">
                     {exercise.bodyPart}
                   </span>
-                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full capitalize">
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs capitalize text-gray-500">
                     {exercise.equipment}
                   </span>
                 </div>
               )}
             </div>
 
-            {/* Sets table header */}
-            <div className="hidden sm:grid grid-cols-12 gap-1 border-t border-gray-100 bg-gray-50 px-4 py-2">
-              <div className="col-span-1 text-xs font-medium text-gray-400 text-center">
-                Set
-              </div>
-              <div className="col-span-3 text-xs font-medium text-gray-400 text-center">
-                Previous
-              </div>
-              <div className="col-span-3 text-xs font-medium text-gray-400 text-center">
-                kg
-              </div>
-              <div className="col-span-3 text-xs font-medium text-gray-400 text-center">
-                Reps
-              </div>
-              <div className="col-span-2 text-xs font-medium text-gray-400 text-center">
-                Ã¢Å“â€œ
+            <div className="hidden border-t border-gray-100 bg-gray-50 px-4 py-2 text-xs font-medium text-gray-400 sm:block">
+              <div className="grid grid-cols-12 gap-2 text-center">
+                <span className="col-span-1">Set</span>
+                <span className="col-span-3">Previous</span>
+                <span className="col-span-3">kg</span>
+                <span className="col-span-3">Reps</span>
+                <span className="col-span-2">Done</span>
               </div>
             </div>
 
-            {/* Sets */}
-            {exercise.sets.map((set, setIndex) => (
-              <div key={setIndex} className="border-t border-gray-50">
+            <div className="divide-y divide-gray-50">
+              {exercise.sets.map((set, setIndex) => (
                 <div
-                  className={`hidden grid-cols-6 gap-2 px-3 py-2 sm:grid sm:grid-cols-12 sm:gap-1 sm:px-4 ${set.completed ? "bg-green-50" : ""}`}
+                  key={set.clientId}
+                  className={`grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-12 sm:gap-2 ${set.completed ? "bg-green-50" : "bg-white"}`}
                 >
-                  <div className="col-span-1 flex items-center justify-center">
+                  <div className="col-span-2 flex items-center justify-between sm:col-span-1 sm:justify-center">
                     <span
                       className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
                     >
                       {setIndex + 1}
                     </span>
-                  </div>
-
-                  <div className="col-span-3 text-center">
-                    <span className="text-xs text-gray-400">
-                      {formatPreviousSet(exIndex, setIndex)}
+                    <span className="text-xs text-gray-400 sm:hidden">
+                      Previous: {formatPreviousSet(exerciseIndex, setIndex)}
                     </span>
                   </div>
 
-                  <div className="col-span-3">
+                  <div className="hidden items-center justify-center text-xs text-gray-400 sm:col-span-3 sm:flex">
+                    {formatPreviousSet(exerciseIndex, setIndex)}
+                  </div>
+
+                  <div className="col-span-1 sm:col-span-3">
+                    <label className="mb-1 block text-[11px] font-medium text-gray-400 sm:hidden">
+                      kg
+                    </label>
                     <input
                       aria-label={`Set ${setIndex + 1} weight in kilograms`}
                       type="number"
                       value={set.weight_kg}
                       min={0}
                       step={0.5}
-                      onChange={(e) =>
+                      onChange={(event) =>
                         updateSet(
-                          exIndex,
+                          exerciseIndex,
                           setIndex,
                           "weight_kg",
-                          parseFloat(e.target.value),
+                          Number.parseFloat(event.target.value),
                         )
                       }
-                      className={`w-full rounded-lg border border-gray-200 py-1.5 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                      className={`w-full rounded-lg border px-2 py-1.5 text-center text-sm font-medium outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "border-gray-200 bg-white text-gray-800"}`}
                     />
                   </div>
 
-                  <div className="col-span-3">
+                  <div className="col-span-1 sm:col-span-3">
+                    <label className="mb-1 block text-[11px] font-medium text-gray-400 sm:hidden">
+                      Reps
+                    </label>
                     <input
                       aria-label={`Set ${setIndex + 1} reps`}
                       type="number"
                       value={set.reps}
                       min={0}
-                      onChange={(e) =>
+                      onChange={(event) =>
                         updateSet(
-                          exIndex,
+                          exerciseIndex,
                           setIndex,
                           "reps",
-                          parseInt(e.target.value),
+                          Number.parseInt(event.target.value, 10),
                         )
                       }
-                      className={`w-full rounded-lg border border-gray-200 py-1.5 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
+                      className={`w-full rounded-lg border px-2 py-1.5 text-center text-sm font-medium outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "border-gray-200 bg-white text-gray-800"}`}
                     />
                   </div>
 
-                  <div className="col-span-2 flex items-center justify-center gap-1 sm:gap-2">
+                  <div className="col-span-2 flex items-center justify-end gap-2 sm:col-span-2 sm:justify-center">
                     <button
-                      onClick={() => toggleSet(exIndex, setIndex)}
+                      type="button"
+                      onClick={() => toggleSet(exerciseIndex, setIndex)}
                       aria-label={`Mark set ${setIndex + 1} as ${set.completed ? "not completed" : "completed"}`}
-                      className={`flex h-7 w-7 items-center justify-center rounded-lg transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
+                      className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                      OK
                     </button>
                     <button
-                      onClick={() => removeSet(exIndex, setIndex)}
+                      type="button"
+                      onClick={() => removeSet(exerciseIndex, setIndex)}
                       disabled={exercise.sets.length <= 1}
                       aria-label="Remove set"
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
+                      className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
                     >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <line x1="6" y1="6" x2="18" y2="18" />
-                        <line x1="6" y1="18" x2="18" y2="6" />
-                      </svg>
+                      X
                     </button>
                   </div>
                 </div>
+              ))}
+            </div>
 
-                <div
-                  className={`space-y-2 px-3 py-3 sm:hidden ${set.completed ? "bg-green-50" : "bg-white"}`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${set.completed ? "bg-green-500 text-white" : "bg-gray-200 text-gray-600"}`}
-                      >
-                        {setIndex + 1}
-                      </span>
-                      <div>
-                        <p className="text-xs font-medium text-gray-500">
-                          Previous
-                        </p>
-                        <p className="text-xs text-gray-400">
-                          {formatPreviousSet(exIndex, setIndex)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => toggleSet(exIndex, setIndex)}
-                        aria-label={`Mark set ${setIndex + 1} as ${set.completed ? "not completed" : "completed"}`}
-                        className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${set.completed ? "bg-green-500 text-white" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => removeSet(exIndex, setIndex)}
-                        disabled={exercise.sets.length <= 1}
-                        aria-label="Remove set"
-                        className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-400 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <line x1="6" y1="6" x2="18" y2="18" />
-                          <line x1="6" y1="18" x2="18" y2="6" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-gray-400">
-                        kg
-                      </label>
-                      <input
-                        aria-label={`Set ${setIndex + 1} weight in kilograms`}
-                        type="number"
-                        value={set.weight_kg}
-                        min={0}
-                        step={0.5}
-                        onChange={(e) =>
-                          updateSet(
-                            exIndex,
-                            setIndex,
-                            "weight_kg",
-                            parseFloat(e.target.value),
-                          )
-                        }
-                        className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-[11px] font-medium text-gray-400">
-                        Reps
-                      </label>
-                      <input
-                        aria-label={`Set ${setIndex + 1} reps`}
-                        type="number"
-                        value={set.reps}
-                        min={0}
-                        onChange={(e) =>
-                          updateSet(
-                            exIndex,
-                            setIndex,
-                            "reps",
-                            parseInt(e.target.value),
-                          )
-                        }
-                        className={`w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-black ${set.completed ? "border-green-200 bg-green-100 text-green-800" : "bg-white text-gray-800"}`}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* Add set */}
             <div className="px-4 pb-4 pt-2">
               <button
-                onClick={() => addSet(exIndex)}
+                type="button"
+                onClick={() => addSet(exerciseIndex)}
                 aria-label={`Add set to ${exercise.name || "exercise"}`}
-                className="w-full py-2 text-xs font-medium text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-lg border border-dashed border-gray-200 transition-colors"
+                className="w-full rounded-lg border border-dashed border-gray-200 bg-gray-50 py-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100"
               >
                 + Add Set
               </button>
@@ -770,44 +883,66 @@ export default function LogWorkoutForm({
           </div>
         ))}
 
-        {/* Add exercise */}
         <button
+          type="button"
           onClick={addExercise}
           aria-label="Add exercise"
-          className="w-full py-3 border border-dashed border-gray-300 rounded-xl text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors bg-white"
+          className="w-full rounded-xl border border-dashed border-gray-300 bg-white py-3 text-sm text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700"
         >
           + Add Exercise
         </button>
 
-        {/* Notes */}
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
           <label
             htmlFor="workout-notes"
-            className="block text-sm font-medium text-gray-700 mb-2"
+            className="mb-2 block text-sm font-medium text-gray-700"
           >
             Notes (optional)
           </label>
           <textarea
             id="workout-notes"
             value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            onChange={(event) => setNotes(event.target.value)}
             rows={2}
             placeholder="How did the session feel?"
             className="w-full resize-none text-sm text-gray-800 placeholder-gray-400 outline-none"
           />
         </div>
+
+        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">
+              Workout template
+            </h2>
+            <p className="text-xs text-gray-500">
+              Save this exercise structure, notes, and rest settings for later.
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="template-name"
+              className="mb-1 block text-xs font-medium text-gray-500"
+            >
+              Template name
+            </label>
+            <input
+              id="template-name"
+              type="text"
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Push day template"
+              className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 outline-none focus:border-black"
+            />
+          </div>
+        </div>
+
         <div className="h-4" />
       </div>
 
-      {/* Info Modal */}
       {infoModal && (
         <div
-          className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
           onClick={closeInfo}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") closeInfo();
-          }}
-          tabIndex={-1}
           role="dialog"
           aria-modal="true"
           aria-label={`Exercise info: ${infoModal.name}`}
@@ -815,24 +950,23 @@ export default function LogWorkoutForm({
           <div
             ref={modalRef}
             tabIndex={-1}
-            className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm overflow-y-auto rounded-t-2xl bg-white sm:rounded-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
-            {/* Modal header */}
-            <div className="sticky top-0 bg-white flex items-center justify-between px-5 pt-5 pb-3 border-b border-gray-100">
+            <div className="sticky top-0 flex items-center justify-between border-b border-gray-100 bg-white px-5 pb-3 pt-5">
               <button
+                type="button"
                 onClick={closeInfo}
                 className="text-sm text-gray-400 hover:text-gray-600"
               >
                 Close
               </button>
-              <h2 className="text-sm font-semibold text-gray-900 capitalize text-center flex-1 px-4 truncate">
+              <h2 className="flex-1 truncate px-4 text-center text-sm font-semibold capitalize text-gray-900">
                 {infoModal.name}
               </h2>
               <div className="w-6" />
             </div>
 
-            {/* GIF */}
             <div className="flex justify-center bg-gray-50 py-5">
               {infoImage ? (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -842,50 +976,50 @@ export default function LogWorkoutForm({
                   width={180}
                   height={180}
                   className="rounded-xl"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
+                  onError={(event) => {
+                    event.currentTarget.style.display = "none";
                   }}
                 />
               ) : (
-                <div className="w-[180px] h-[180px] flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
+                <div className="flex h-[180px] w-[180px] items-center justify-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-300 border-t-black" />
                 </div>
               )}
             </div>
 
-            {/* Details */}
             <div className="px-5 pb-6">
-              {/* Muscle info */}
-              <div className="flex gap-2 mb-4 flex-wrap">
-                <span className="text-xs bg-blue-50 text-blue-600 px-2.5 py-1 rounded-full capitalize font-medium">
+              <div className="mb-4 flex flex-wrap gap-2">
+                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium capitalize text-blue-600">
                   {infoModal.bodyPart}
                 </span>
-                <span className="text-xs bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full capitalize">
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs capitalize text-gray-600">
                   {infoModal.equipment}
                 </span>
-                {infoModal.secondaryMuscles?.slice(0, 2).map((m) => (
+                {infoModal.secondaryMuscles?.slice(0, 2).map((muscle) => (
                   <span
-                    key={m}
-                    className="text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full capitalize"
+                    key={muscle}
+                    className="rounded-full bg-gray-100 px-2.5 py-1 text-xs capitalize text-gray-500"
                   >
-                    {m}
+                    {muscle}
                   </span>
                 ))}
               </div>
 
-              {/* Instructions */}
               {infoModal.instructions?.length > 0 && (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                  <h3 className="mb-3 text-sm font-semibold text-gray-900">
                     Instructions
                   </h3>
                   <ol className="space-y-3">
-                    {infoModal.instructions.map((step, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span className="text-xs font-bold text-gray-400 mt-0.5 flex-shrink-0 w-4">
-                          {i + 1}.
+                    {infoModal.instructions.map((step, index) => (
+                      <li
+                        key={`${infoModal.exerciseId}-${index}`}
+                        className="flex gap-3"
+                      >
+                        <span className="mt-0.5 w-4 flex-shrink-0 text-xs font-bold text-gray-400">
+                          {index + 1}.
                         </span>
-                        <p className="text-sm text-gray-700 leading-relaxed">
+                        <p className="text-sm leading-relaxed text-gray-700">
                           {step}
                         </p>
                       </li>

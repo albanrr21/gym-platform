@@ -40,7 +40,7 @@ export default function WorkoutDetail({ workout }: { workout: Workout }) {
         href="/dashboard"
         className="mb-4 inline-block text-sm text-gray-600 hover:text-gray-900"
       >
-        ← Back to Dashboard
+        Back to Dashboard
       </Link>
       <div className="rounded-xl border border-gray-200 bg-white p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -82,7 +82,7 @@ export default function WorkoutDetail({ workout }: { workout: Workout }) {
                         <td className="py-2 pr-4">{set.weight_kg ?? 0}</td>
                         <td className="py-2 pr-4">{set.reps ?? 0}</td>
                         <td className="py-2 pr-4">{set.rpe ?? "-"}</td>
-                        <td className="py-2">{set.completed ? "✓" : "-"}</td>
+                        <td className="py-2">{set.completed ? "Yes" : "-"}</td>
                       </tr>
                     ))}
                   </tbody>

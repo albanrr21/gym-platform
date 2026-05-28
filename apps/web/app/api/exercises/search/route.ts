@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         "X-RapidAPI-Key": rapidApiKey,
         "X-RapidAPI-Host": "exercisedb.p.rapidapi.com",
       },
+      next: { revalidate: 86400 },
     },
   );
 

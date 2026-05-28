@@ -23,11 +23,22 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint code
-        run: pnpm lint
-
       - name: Type-check code
         run: pnpm type-check
 
+      - name: Lint code
+        run: pnpm lint
+
       - name: Run tests
         run: pnpm test
+
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          RAPIDAPI_KEY: ${{ secrets.RAPIDAPI_KEY }}
+          ROOT_DOMAIN: ${{ secrets.ROOT_DOMAIN }}
+          NEXT_PUBLIC_ROOT_DOMAIN: ${{ secrets.ROOT_DOMAIN }}

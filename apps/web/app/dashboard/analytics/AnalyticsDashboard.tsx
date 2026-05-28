@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AnalyticsSkeleton from "./AnalyticsSkeleton";
 import {
   Bar,
   BarChart,
@@ -39,11 +40,7 @@ export default function AnalyticsDashboard() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
-      </div>
-    );
+    return <AnalyticsSkeleton />;
   }
 
   if (!data) {
@@ -155,8 +152,8 @@ export default function AnalyticsDashboard() {
             Top exercises by volume
           </h2>
           <div className="space-y-3">
-            {data.topExercises.map((ex, i) => (
-              <div key={i}>
+            {data.topExercises.map((ex) => (
+              <div key={ex.name}>
                 <div className="mb-1 flex justify-between">
                   <span className="max-w-[70%] truncate text-xs capitalize text-gray-700">
                     {ex.name}
@@ -183,9 +180,9 @@ export default function AnalyticsDashboard() {
             Best lifts
           </h2>
           <div className="space-y-2">
-            {data.bestLifts.map((lift, i) => (
+            {data.bestLifts.map((lift) => (
               <div
-                key={i}
+                key={lift.name}
                 className="flex items-center justify-between border-b border-gray-50 py-2 last:border-0"
               >
                 <span className="text-sm text-gray-700 capitalize">

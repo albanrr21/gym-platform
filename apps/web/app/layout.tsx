@@ -1,39 +1,45 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { CSSProperties } from "react";
 
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/AuthContext";
 import { validatePublicEnv } from "@/lib/env";
 import { ToastProvider } from "@/components/ui/Toast";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import { getGym } from "@/lib/gym/getGym";
+import { getGymTheme } from "@/lib/gym/theme";
 
 export const metadata: Metadata = {
   title: "Gym Platform",
   description: "AI-powered gym performance platform",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   validatePublicEnv();
+  const gym = await getGym();
+  const theme = getGymTheme(gym);
 
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-        suppressHydrationWarning={true}
-      >
+    <html
+      lang="en"
+      style={
+        {
+          "--background": theme.background,
+          "--foreground": theme.foreground,
+          "--theme-background": theme.background,
+          "--theme-foreground": theme.foreground,
+          "--theme-brand": theme.brand,
+          "--theme-brand-foreground": theme.brandForeground,
+          "--theme-brand-soft": theme.brandSoft,
+          "--theme-border": theme.border,
+          "--theme-muted": theme.muted,
+        } as CSSProperties
+      }
+    >
+      <body className="antialiased" suppressHydrationWarning={true}>
         <AuthProvider>
           <ToastProvider>{children}</ToastProvider>
         </AuthProvider>

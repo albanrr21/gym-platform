@@ -25,6 +25,7 @@ export async function GET(request: NextRequest) {
         "X-RapidAPI-Key": rapidApiKey,
         "X-RapidAPI-Host": "exercisedb.p.rapidapi.com",
       },
+      next: { revalidate: 86400 },
     },
   );
 
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
   return new NextResponse(buffer, {
     headers: {
       "Content-Type": contentType,
-      "Cache-Control": "no-store",
+      "Cache-Control": "public, max-age=86400, stale-while-revalidate=604800",
     },
   });
 }

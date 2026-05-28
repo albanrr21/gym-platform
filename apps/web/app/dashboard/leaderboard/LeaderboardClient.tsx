@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import LeaderboardSkeleton from "./LeaderboardSkeleton";
 
 interface LeaderboardEntry {
   userId: string;
@@ -18,10 +19,7 @@ interface LeaderboardData {
   gymName: string;
 }
 
-const medals = ["🥇", "🥈", "🥉"];
-
 function getRankDisplay(rank: number) {
-  if (rank <= 3) return medals[rank - 1];
   return `#${rank}`;
 }
 
@@ -204,13 +202,11 @@ export default function LeaderboardClient() {
         {/* Content */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
-            </div>
+            <LeaderboardSkeleton />
           ) : tab === "volume" ? (
             <>
               <p className="text-xs text-gray-400 mb-3">
-                Ranked by total kg lifted — all time
+                Ranked by total kg lifted, all time
               </p>
               <LeaderboardTable entries={data?.volume || []} unit="kg" />
             </>
