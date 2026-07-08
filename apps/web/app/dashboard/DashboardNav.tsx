@@ -15,16 +15,6 @@ const desktopItems = [
   { href: "/dashboard/profile", label: "Profile" },
 ];
 
-const mobileItems = [
-  { href: "/dashboard", label: "Home", exact: true },
-  { href: "/dashboard/log", label: "Log", exact: true },
-  { href: "/dashboard/history", label: "History" },
-  { href: "/dashboard/templates", label: "Templates" },
-  { href: "/dashboard/analytics", label: "Stats" },
-  { href: "/dashboard/ai-report", label: "AI" },
-  { href: "/dashboard/profile", label: "Profile" },
-];
-
 export default async function DashboardNav() {
   const supabase = await createClient();
   const {
@@ -70,21 +60,6 @@ export default async function DashboardNav() {
         </div>
         <LogoutButton />
       </div>
-
-      {/* Mobile bottom nav */}
-      <nav className="border-t border-[var(--theme-border)] bg-[var(--background)] px-2 py-2 sm:hidden">
-        <div className="mx-auto grid max-w-6xl grid-cols-7 gap-1.5">
-          {mobileItems.map((item) => (
-            <ActiveLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              exact={item.exact}
-              mobile
-            />
-          ))}
-        </div>
-      </nav>
     </header>
   );
 }

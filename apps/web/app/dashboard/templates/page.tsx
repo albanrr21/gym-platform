@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import { getGym } from "@/lib/gym/getGym";
 import { createClient } from "@/lib/supabase/server";
 
+export const metadata = {
+  title: "Templates",
+};
+
 type WorkoutTemplateRow = {
   id: string;
   template_name: string;
@@ -101,7 +105,7 @@ export default async function WorkoutTemplatesPage() {
                     <p className="mt-1 text-sm text-gray-500">
                       {exerciseCount} exercises, {setCount} sets
                     </p>
-                    <p className="mt-1 text-xs text-gray-400">
+                    <p className="mt-1 text-xs text-gray-500">
                       Rest {template.set_rest_seconds}s between sets and{" "}
                       {template.exercise_rest_seconds}s between exercises
                     </p>
@@ -114,11 +118,11 @@ export default async function WorkoutTemplatesPage() {
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/dashboard/log?template=${template.id}`}
-                      className="rounded-lg bg-black px-3 py-2 text-xs font-medium text-white hover:bg-gray-800"
+                      className="rounded-lg bg-[var(--theme-brand)] px-3 py-2 text-xs font-medium text-[var(--theme-brand-foreground)] hover:opacity-90"
                     >
                       Use template
                     </Link>
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-500">
                       {new Date(template.created_at).toLocaleDateString(
                         "en-GB",
                         {

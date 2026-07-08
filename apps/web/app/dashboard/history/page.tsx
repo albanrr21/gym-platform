@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
+export const metadata = {
+  title: "History",
+};
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 type WorkoutRow = {
@@ -66,6 +70,7 @@ export default async function HistoryPage({
     );
   });
 
+  const hasFilters = Boolean(dateFrom || dateTo || exerciseQuery);
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
   const offset = (safePage - 1) * PAGE_SIZE;
@@ -89,10 +94,14 @@ export default async function HistoryPage({
 
       <form className="mb-4 grid grid-cols-1 gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:grid-cols-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label
+            htmlFor="history-from"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
             From
           </label>
           <input
+            id="history-from"
             type="date"
             name="from"
             defaultValue={dateFrom}
@@ -100,10 +109,14 @@ export default async function HistoryPage({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label
+            htmlFor="history-to"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
             To
           </label>
           <input
+            id="history-to"
             type="date"
             name="to"
             defaultValue={dateTo}
@@ -111,10 +124,14 @@ export default async function HistoryPage({
           />
         </div>
         <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-gray-600">
+          <label
+            htmlFor="history-exercise"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
             Exercise
           </label>
           <input
+            id="history-exercise"
             type="text"
             name="exercise"
             defaultValue={exerciseQuery}
@@ -123,20 +140,40 @@ export default async function HistoryPage({
           />
         </div>
         <input type="hidden" name="page" value="1" />
-        <div className="sm:col-span-4">
+        <div className="flex items-center gap-3 sm:col-span-4">
           <button
             type="submit"
-            className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
+            className="rounded-lg bg-[var(--theme-brand)] px-4 py-2 text-sm font-medium text-[var(--theme-brand-foreground)] hover:opacity-90"
           >
             Apply filters
           </button>
+          {hasFilters && (
+            <Link
+              href="/dashboard/history"
+              className="text-sm text-gray-600 hover:text-gray-900 hover:underline"
+            >
+              Clear filters
+            </Link>
+          )}
         </div>
       </form>
 
       <div className="space-y-3">
         {rows.length === 0 ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-            No workouts match your filters.
+            {hasFilters ? (
+              "No workouts match your filters."
+            ) : (
+              <>
+                No workouts logged yet.{" "}
+                <Link
+                  href="/dashboard/log"
+                  className="font-medium text-gray-900 hover:underline"
+                >
+                  Log your first workout
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           rows.map((workout) => (
@@ -169,7 +206,7 @@ export default async function HistoryPage({
                 ))}
               </div>
               {workout.notes && (
-                <p className="mt-2 text-xs italic text-gray-400">{workout.notes}</p>
+                <p className="mt-2 text-xs italic text-gray-500">{workout.notes}</p>
               )}
             </Link>
           ))

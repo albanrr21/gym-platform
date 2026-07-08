@@ -4,6 +4,10 @@ import { redirect } from "next/navigation";
 import LogWorkoutForm from "./LogWorkoutForm";
 import type { WorkoutExerciseData } from "@/lib/workout/types";
 
+export const metadata = {
+  title: "Log Workout",
+};
+
 type SearchParams = Record<string, string | string[] | undefined>;
 
 function normalizeExercise(exercise: unknown): WorkoutExerciseData | null {

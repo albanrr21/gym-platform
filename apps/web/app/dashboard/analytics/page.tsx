@@ -5,6 +5,10 @@ import AnalyticsDashboard from "./AnalyticsDashboard";
 import { Suspense } from "react";
 import AnalyticsSkeleton from "./AnalyticsSkeleton";
 
+export const metadata = {
+  title: "Analytics",
+};
+
 export default async function AnalyticsPage() {
   const supabase = await createClient();
   const {

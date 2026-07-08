@@ -3,6 +3,10 @@ import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
 import ProfileForm from "./ProfileForm";
 
+export const metadata = {
+  title: "Profile",
+};
+
 export default async function ProfilePage() {
   const supabase = await createClient();
   const {

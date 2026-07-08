@@ -43,13 +43,25 @@ export async function GET(request: NextRequest) {
     )
     .eq("user_id", user.id)
     .order("logged_at", { ascending: false })
-    .limit(40);
+    .limit(365);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   const workouts = (data ?? []) as WorkoutRow[];
+
+  let bestWeight = 0;
+  for (const workout of workouts) {
+    for (const ex of workout.exercises ?? []) {
+      if ((ex.name ?? "").trim().toLowerCase() !== needle) continue;
+      for (const set of ex.sets ?? []) {
+        if (set.completed === false) continue;
+        bestWeight = Math.max(bestWeight, set.weight_kg ?? 0);
+      }
+    }
+  }
+
   for (const workout of workouts) {
     const matching = (workout.exercises ?? []).find(
       (ex) => (ex.name ?? "").trim().toLowerCase() === needle,
@@ -64,8 +76,8 @@ export async function GET(request: NextRequest) {
         reps: s.reps ?? 0,
       }));
 
-    return NextResponse.json({ sets });
+    return NextResponse.json({ sets, best_weight_kg: bestWeight });
   }
 
-  return NextResponse.json({ sets: [] });
+  return NextResponse.json({ sets: [], best_weight_kg: bestWeight });
 }

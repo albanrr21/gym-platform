@@ -66,6 +66,20 @@ const fatigueLabels = {
   high: "High fatigue",
 };
 
+const generationStages = [
+  "Reading your training history",
+  "Analyzing volume and fatigue",
+  "Checking for plateaus",
+  "Writing recommendations",
+];
+
+function getCurrentStage(streamedLength: number) {
+  if (streamedLength === 0) return 0;
+  if (streamedLength < 300) return 1;
+  if (streamedLength < 700) return 2;
+  return 3;
+}
+
 export default function AIReportClient() {
   const [report, setReport] = useState<AIReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,14 +161,14 @@ export default function AIReportClient() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Weekly Analysis</p>
-            <p className="mt-0.5 text-xs text-gray-400">
+            <p className="mt-0.5 text-xs text-gray-500">
               Based on your last 4 weeks of training
             </p>
           </div>
           <button
             onClick={generateReport}
             disabled={loading}
-            className="flex items-center gap-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-2 rounded-lg bg-[var(--theme-brand)] px-4 py-2 text-sm font-medium text-[var(--theme-brand-foreground)] transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {loading ? (
               <>
@@ -181,22 +195,58 @@ export default function AIReportClient() {
       {/* Loading state */}
       {fetching && <AIReportSkeleton />}
 
-      {loading && streamedText && (
+      {loading && (
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="mb-2 text-xs font-medium text-gray-500">
-            Streaming analysis...
-          </p>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap text-xs text-gray-700">
-            {streamedText}
-          </pre>
+          <ul className="space-y-2.5">
+            {generationStages.map((stage, index) => {
+              const currentStage = getCurrentStage(streamedText.length);
+              const done = index < currentStage;
+              const active = index === currentStage;
+
+              return (
+                <li
+                  key={stage}
+                  className={`flex items-center gap-2.5 text-sm ${
+                    done
+                      ? "text-gray-500"
+                      : active
+                        ? "font-medium text-gray-900"
+                        : "text-gray-300"
+                  }`}
+                >
+                  {done ? (
+                    <svg
+                      aria-hidden="true"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="shrink-0 text-green-500"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  ) : active ? (
+                    <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-gray-200 border-t-gray-700" />
+                  ) : (
+                    <span className="h-4 w-4 shrink-0 rounded-full border-2 border-gray-200" />
+                  )}
+                  {stage}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
       {/* No report yet */}
       {!fetching && !report && !loading && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
-          <p className="mb-1 text-sm text-gray-400">No report generated yet.</p>
-          <p className="text-xs text-gray-400">
+          <p className="mb-1 text-sm text-gray-500">No report generated yet.</p>
+          <p className="text-xs text-gray-500">
             Click Generate Report to get your AI performance analysis.
           </p>
         </div>
@@ -212,24 +262,24 @@ export default function AIReportClient() {
             </h2>
             <div className="mb-3 grid grid-cols-3 gap-3">
               <div className="rounded-lg bg-gray-50 p-3 text-center">
-                <p className="mb-1 text-xs text-gray-400">Sessions</p>
+                <p className="mb-1 text-xs text-gray-500">Sessions</p>
                 <p className="text-xl font-bold text-gray-900">
                   {report.weekly_summary.sessions_this_week}
                 </p>
               </div>
               <div className="rounded-lg bg-gray-50 p-3 text-center">
-                <p className="mb-1 text-xs text-gray-400">Volume</p>
+                <p className="mb-1 text-xs text-gray-500">Volume</p>
                 <p className="text-xl font-bold text-gray-900">
                   {report.weekly_summary.total_volume_kg >= 1000
                     ? `${(report.weekly_summary.total_volume_kg / 1000).toFixed(1)}k`
                     : report.weekly_summary.total_volume_kg}
-                  <span className="ml-0.5 text-xs font-normal text-gray-400">
+                  <span className="ml-0.5 text-xs font-normal text-gray-500">
                     kg
                   </span>
                 </p>
               </div>
               <div className="rounded-lg bg-gray-50 p-3 text-center">
-                <p className="mb-1 text-xs text-gray-400">vs Last Week</p>
+                <p className="mb-1 text-xs text-gray-500">vs Last Week</p>
                 <p
                   className={`text-xl font-bold ${report.weekly_summary.vs_last_week.startsWith("+") ? "text-green-600" : report.weekly_summary.vs_last_week.startsWith("-") ? "text-red-500" : "text-gray-900"}`}
                 >
@@ -332,7 +382,7 @@ export default function AIReportClient() {
                         {item.exercise}
                       </span>
                       <div className="flex items-center gap-1.5 text-sm">
-                        <span className="text-gray-400">
+                        <span className="text-gray-500">
                           {item.current_max_kg}kg
                         </span>
                         <span className="text-gray-300">-&gt;</span>
@@ -341,7 +391,7 @@ export default function AIReportClient() {
                         </span>
                       </div>
                     </div>
-                    <p className="text-xs text-gray-400">{item.reasoning}</p>
+                    <p className="text-xs text-gray-500">{item.reasoning}</p>
                   </div>
                 ))}
               </div>

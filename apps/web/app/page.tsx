@@ -1,5 +1,6 @@
 import { getGym } from "@/lib/gym/getGym";
 import { redirect } from "next/navigation";
+import { fasterOne } from "@/lib/fonts";
 
 const features = [
   {
@@ -76,7 +77,7 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="landing-shell">
+    <main className={`landing-shell ${fasterOne.variable}`}>
       <section className="landing-section landing-section--hero">
         <div className="hero-grid">
           <div className="hero-copy">
@@ -119,7 +120,7 @@ export default async function HomePage() {
               <a className="button-link button-link--primary" href="/register">
                 Get Started
               </a>
-              <a className="button-link button-link--secondary" href="#demo">
+              <a className="button-link button-link--secondary" href="/ai-demo">
                 See the Demo
               </a>
             </div>

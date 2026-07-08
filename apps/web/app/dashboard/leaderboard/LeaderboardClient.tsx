@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import LeaderboardSkeleton from "./LeaderboardSkeleton";
+import { fetchJson } from "@/lib/http/fetchJson";
 
 interface LeaderboardEntry {
   userId: string;
@@ -33,8 +34,8 @@ function LeaderboardTable({
   if (!entries.length) {
     return (
       <div className="py-8 text-center">
-        <p className="text-sm text-gray-400">No data yet.</p>
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-sm text-gray-500">No data yet.</p>
+        <p className="text-xs text-gray-500 mt-1">
           Log workouts to appear on the leaderboard.
         </p>
       </div>
@@ -49,14 +50,14 @@ function LeaderboardTable({
         <div
           key={entry.userId}
           className={`rounded-xl p-3 ${
-            entry.isCurrentUser ? "bg-black text-white" : "bg-gray-50"
+            entry.isCurrentUser ? "bg-[var(--theme-brand)] text-[var(--theme-brand-foreground)]" : "bg-gray-50"
           }`}
         >
           <div className="flex items-center gap-3">
             {/* Rank */}
             <div className="w-8 text-center flex-shrink-0">
               <span
-                className={`text-sm font-bold ${entry.isCurrentUser ? "text-white" : "text-gray-500"}`}
+                className={`text-sm font-bold ${entry.isCurrentUser ? "text-[var(--theme-brand-foreground)]" : "text-gray-500"}`}
               >
                 {getRankDisplay(entry.rank)}
               </span>
@@ -66,7 +67,7 @@ function LeaderboardTable({
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-1">
                 <span
-                  className={`text-sm font-medium truncate ${entry.isCurrentUser ? "text-white" : "text-gray-800"}`}
+                  className={`text-sm font-medium truncate ${entry.isCurrentUser ? "text-[var(--theme-brand-foreground)]" : "text-gray-800"}`}
                 >
                   {entry.name}
                   {entry.isCurrentUser && (
@@ -76,13 +77,13 @@ function LeaderboardTable({
                   )}
                 </span>
                 <span
-                  className={`text-sm font-semibold ml-2 flex-shrink-0 ${entry.isCurrentUser ? "text-white" : "text-gray-900"}`}
+                  className={`text-sm font-semibold ml-2 flex-shrink-0 ${entry.isCurrentUser ? "text-[var(--theme-brand-foreground)]" : "text-gray-900"}`}
                 >
                   {unit === "kg" && entry.value >= 1000
                     ? `${(entry.value / 1000).toFixed(1)}k`
                     : entry.value}
                   <span
-                    className={`text-xs font-normal ml-0.5 ${entry.isCurrentUser ? "opacity-70" : "text-gray-400"}`}
+                    className={`text-xs font-normal ml-0.5 ${entry.isCurrentUser ? "opacity-70" : "text-gray-500"}`}
                   >
                     {unit}
                   </span>
@@ -91,10 +92,10 @@ function LeaderboardTable({
 
               {/* Progress bar */}
               <div
-                className={`h-1 rounded-full ${entry.isCurrentUser ? "bg-white/20" : "bg-gray-200"}`}
+                className={`h-1 rounded-full ${entry.isCurrentUser ? "bg-[var(--theme-brand-foreground)]/20" : "bg-gray-200"}`}
               >
                 <div
-                  className={`h-full rounded-full ${entry.isCurrentUser ? "bg-white" : "bg-black"}`}
+                  className={`h-full rounded-full ${entry.isCurrentUser ? "bg-[var(--theme-brand-foreground)]" : "bg-[var(--theme-brand)]"}`}
                   style={{ width: `${(entry.value / maxValue) * 100}%` }}
                 />
               </div>
@@ -110,28 +111,28 @@ export default function LeaderboardClient() {
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [tab, setTab] = useState<"volume" | "consistency">("volume");
 
   async function loadLeaderboard(isRefresh = false) {
     if (isRefresh) setRefreshing(true);
-    fetch("/api/leaderboard")
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false))
-      .finally(() => {
-        if (isRefresh) setRefreshing(false);
-      });
+    try {
+      const d = await fetchJson<LeaderboardData>("/api/leaderboard");
+      setData(d);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+      if (isRefresh) setRefreshing(false);
+    }
   }
 
   useEffect(() => {
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadLeaderboard(false);
+    void loadLeaderboard(false);
     const timer = setInterval(() => {
-      loadLeaderboard(true);
+      if (document.hidden) return; // skip refresh in background tabs
+      void loadLeaderboard(true);
     }, 60_000);
     return () => clearInterval(timer);
   }, []);
@@ -148,7 +149,7 @@ export default function LeaderboardClient() {
         <div>
           <h1 className="text-sm font-semibold text-gray-900">Leaderboard</h1>
           {data?.gymName && (
-            <p className="text-xs text-gray-400">{data.gymName}</p>
+            <p className="text-xs text-gray-500">{data.gymName}</p>
           )}
         </div>
         <button
@@ -162,8 +163,14 @@ export default function LeaderboardClient() {
 
       <div>
         {/* Tabs */}
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
+        <div
+          role="tablist"
+          aria-label="Leaderboard ranking type"
+          className="flex bg-gray-100 rounded-xl p-1 mb-4"
+        >
           <button
+            role="tab"
+            aria-selected={tab === "volume"}
             onClick={() => setTab("volume")}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
               tab === "volume"
@@ -174,6 +181,8 @@ export default function LeaderboardClient() {
             Total Volume
           </button>
           <button
+            role="tab"
+            aria-selected={tab === "consistency"}
             onClick={() => setTab("consistency")}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${
               tab === "consistency"
@@ -187,7 +196,7 @@ export default function LeaderboardClient() {
 
         {!loading && tabCurrentUser && !userInTopTen && (
           <div className="mb-4 rounded-xl border border-gray-200 bg-white p-4">
-            <p className="text-xs text-gray-400 mb-1">Your rank</p>
+            <p className="text-xs text-gray-500 mb-1">Your rank</p>
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium text-gray-900">
                 #{tabCurrentUser.rank} {tabCurrentUser.name}
@@ -203,16 +212,31 @@ export default function LeaderboardClient() {
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           {loading ? (
             <LeaderboardSkeleton />
+          ) : loadError && !data ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-gray-600">
+                Couldn&apos;t load the leaderboard.
+              </p>
+              <button
+                onClick={() => {
+                  setLoading(true);
+                  void loadLeaderboard(false);
+                }}
+                className="mt-3 rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Try again
+              </button>
+            </div>
           ) : tab === "volume" ? (
             <>
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-xs text-gray-500 mb-3">
                 Ranked by total kg lifted, all time
               </p>
               <LeaderboardTable entries={data?.volume || []} unit="kg" />
             </>
           ) : (
             <>
-              <p className="text-xs text-gray-400 mb-3">
+              <p className="text-xs text-gray-500 mb-3">
                 Ranked by workouts logged this month
               </p>
               <LeaderboardTable

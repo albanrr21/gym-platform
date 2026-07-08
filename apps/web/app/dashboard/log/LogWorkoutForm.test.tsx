@@ -209,7 +209,7 @@ describe("LogWorkoutForm", () => {
       );
     });
 
-    expect(router.push).toHaveBeenCalledWith("/dashboard?saved=workout");
+    expect(router.push).toHaveBeenCalledWith("/dashboard");
   });
 
   it("does not save workout history when saving a template", async () => {

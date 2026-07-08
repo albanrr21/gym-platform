@@ -21,7 +21,13 @@ type Workout = {
   exercises: WorkoutExercise[] | null;
 };
 
-export default function WorkoutDetail({ workout }: { workout: Workout }) {
+export default function WorkoutDetail({
+  workout,
+  bestWeights = {},
+}: {
+  workout: Workout;
+  bestWeights?: Record<string, number>;
+}) {
   const exercises = workout.exercises ?? [];
   const totalVolume = exercises.reduce((sum, exercise) => {
     const sets = exercise.sets ?? [];
@@ -59,37 +65,66 @@ export default function WorkoutDetail({ workout }: { workout: Workout }) {
         </p>
 
         <div className="space-y-4">
-          {exercises.map((exercise) => (
-            <div key={exercise.id} className="rounded-xl border border-gray-200 p-4">
-              <h2 className="mb-3 text-base font-semibold text-gray-900">
-                {exercise.name}
-              </h2>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-500">
-                      <th className="pb-2 pr-4">Set #</th>
-                      <th className="pb-2 pr-4">Weight (kg)</th>
-                      <th className="pb-2 pr-4">Reps</th>
-                      <th className="pb-2 pr-4">RPE</th>
-                      <th className="pb-2">Completed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(exercise.sets ?? []).map((set, index) => (
-                      <tr key={`${exercise.id}-${index}`} className="border-t border-gray-100">
-                        <td className="py-2 pr-4">{set.set_number ?? index + 1}</td>
-                        <td className="py-2 pr-4">{set.weight_kg ?? 0}</td>
-                        <td className="py-2 pr-4">{set.reps ?? 0}</td>
-                        <td className="py-2 pr-4">{set.rpe ?? "-"}</td>
-                        <td className="py-2">{set.completed ? "Yes" : "-"}</td>
+          {exercises.map((exercise) => {
+            const exerciseBest =
+              bestWeights[exercise.name.trim().toLowerCase()] ?? 0;
+
+            return (
+              <div
+                key={exercise.id}
+                className="rounded-xl border border-gray-200 p-4"
+              >
+                <h2 className="mb-3 text-base font-semibold capitalize text-gray-900">
+                  {exercise.name}
+                </h2>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-gray-500">
+                        <th className="pb-2 pr-4">Set #</th>
+                        <th className="pb-2 pr-4">Weight (kg)</th>
+                        <th className="pb-2 pr-4">Reps</th>
+                        <th className="pb-2 pr-4">RPE</th>
+                        <th className="pb-2">Completed</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(exercise.sets ?? []).map((set, index) => {
+                        const isBest =
+                          set.completed !== false &&
+                          exerciseBest > 0 &&
+                          (set.weight_kg ?? 0) === exerciseBest;
+
+                        return (
+                          <tr
+                            key={`${exercise.id}-${index}`}
+                            className="border-t border-gray-100"
+                          >
+                            <td className="py-2 pr-4">
+                              <span className="inline-flex items-center gap-1.5">
+                                {set.set_number ?? index + 1}
+                                {isBest && (
+                                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">
+                                    PR
+                                  </span>
+                                )}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-4">{set.weight_kg ?? 0}</td>
+                            <td className="py-2 pr-4">{set.reps ?? 0}</td>
+                            <td className="py-2 pr-4">{set.rpe ?? "-"}</td>
+                            <td className="py-2">
+                              {set.completed ? "Yes" : "-"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

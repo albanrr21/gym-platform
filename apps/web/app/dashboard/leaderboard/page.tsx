@@ -5,6 +5,10 @@ import LeaderboardClient from "./LeaderboardClient";
 import { Suspense } from "react";
 import LeaderboardSkeleton from "./LeaderboardSkeleton";
 
+export const metadata = {
+  title: "Leaderboard",
+};
+
 export default async function LeaderboardPage() {
   const supabase = await createClient();
   const {

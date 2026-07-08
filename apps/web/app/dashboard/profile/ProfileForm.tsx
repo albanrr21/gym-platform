@@ -3,6 +3,8 @@
 import { createClient } from "@/lib/supabase/client";
 import { useState } from "react";
 import { useToast } from "@/components/ui/Toast";
+import PasswordInput from "@/components/ui/PasswordInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 type Props = {
   initialFullName: string;
@@ -20,12 +22,15 @@ export default function ProfileForm({
   const supabase = createClient();
   const [fullName, setFullName] = useState(initialFullName);
   const [newPassword, setNewPassword] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loadingName, setLoadingName] = useState(false);
   const [loadingPassword, setLoadingPassword] = useState(false);
   const [loadingSignOut, setLoadingSignOut] = useState(false);
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
   const { showToast } = useToast();
 
-  async function updateName() {
+  async function updateName(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (loadingName) return;
     setLoadingName(true);
 
@@ -48,12 +53,14 @@ export default function ProfileForm({
     }
   }
 
-  async function updatePassword() {
+  async function updatePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (loadingPassword) return;
     if (newPassword.length < 6) {
-      showToast("New password must be at least 6 characters.", "error");
+      setPasswordError("New password must be at least 6 characters.");
       return;
     }
+    setPasswordError(null);
 
     setLoadingPassword(true);
     try {
@@ -101,30 +108,39 @@ export default function ProfileForm({
         <p className="mb-4 text-sm text-gray-500">Manage account settings.</p>
 
         <div className="space-y-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+          <form onSubmit={updateName}>
+            <label
+              htmlFor="profile-name"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
               Display name
             </label>
             <input
+              id="profile-name"
               type="text"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
+              autoComplete="name"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-black"
             />
             <button
-              onClick={updateName}
+              type="submit"
               disabled={loadingName}
-              className="mt-2 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-2 rounded-lg bg-[var(--theme-brand)] px-4 py-2 text-sm font-medium text-[var(--theme-brand-foreground)] hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingName ? "Saving..." : "Save name"}
             </button>
-          </div>
+          </form>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="profile-email"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
               Email
             </label>
             <input
+              id="profile-email"
               type="email"
               value={email}
               readOnly
@@ -132,25 +148,38 @@ export default function ProfileForm({
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-gray-700">
+          <form onSubmit={updatePassword}>
+            <label
+              htmlFor="profile-new-password"
+              className="mb-1 block text-sm font-medium text-gray-700"
+            >
               New password
             </label>
-            <input
-              type="password"
+            <PasswordInput
+              id="profile-new-password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={setNewPassword}
+              autoComplete="new-password"
               placeholder="At least 6 characters"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-900 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-black"
+              invalid={Boolean(passwordError)}
+              describedBy={passwordError ? "profile-password-error" : undefined}
             />
+            {passwordError && (
+              <p
+                id="profile-password-error"
+                className="mt-1 text-xs text-red-600"
+              >
+                {passwordError}
+              </p>
+            )}
             <button
-              onClick={updatePassword}
+              type="submit"
               disabled={loadingPassword}
               className="mt-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingPassword ? "Updating..." : "Update password"}
             </button>
-          </div>
+          </form>
         </div>
       </div>
 
@@ -172,13 +201,27 @@ export default function ProfileForm({
         <h2 className="mb-1 text-base font-semibold text-gray-900">Danger zone</h2>
         <p className="mb-3 text-sm text-gray-500">Sign out from all devices.</p>
         <button
-          onClick={signOutEverywhere}
+          onClick={() => setConfirmSignOut(true)}
           disabled={loadingSignOut}
           className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {loadingSignOut ? "Signing out..." : "Sign out everywhere"}
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirmSignOut}
+        title="Sign out from all devices?"
+        body="You will be logged out everywhere, including this device."
+        confirmLabel="Sign out everywhere"
+        destructive
+        loading={loadingSignOut}
+        onConfirm={() => {
+          setConfirmSignOut(false);
+          void signOutEverywhere();
+        }}
+        onCancel={() => setConfirmSignOut(false)}
+      />
     </div>
   );
 }

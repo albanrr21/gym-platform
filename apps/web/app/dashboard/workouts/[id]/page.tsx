@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import WorkoutDetail from "./WorkoutDetail";
+import { computeBestWeights, type PrWorkoutRow } from "@/lib/workout/prs";
+
+export const metadata = {
+  title: "Workout Detail",
+};
 
 export default async function WorkoutDetailPage({
   params,
@@ -26,6 +31,15 @@ export default async function WorkoutDetailPage({
 
   if (!workout) redirect("/dashboard");
 
+  const { data: allWorkouts } = await supabase
+    .from("workouts")
+    .select("logged_at, exercises(name, sets(weight_kg, reps, completed))")
+    .eq("user_id", user.id)
+    .limit(365);
 
-  return <WorkoutDetail workout={workout} />;
+  const bestWeights = computeBestWeights(
+    (allWorkouts ?? []) as PrWorkoutRow[],
+  );
+
+  return <WorkoutDetail workout={workout} bestWeights={bestWeights} />;
 }

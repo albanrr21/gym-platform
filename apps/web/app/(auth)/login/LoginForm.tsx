@@ -5,30 +5,35 @@ import { createClient } from "@/lib/supabase/client";
 import { buildGymBaseUrl } from "@/lib/tenancy/subdomain";
 import Link from "next/link";
 import { useToast } from "@/components/ui/Toast";
+import PasswordInput from "@/components/ui/PasswordInput";
+
+type FieldErrors = { email?: string; password?: string };
 
 export default function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [loading, setLoading] = useState(false);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
   const supabase = createClient();
   const { showToast } = useToast();
 
-  function validate(): string | null {
-    if (!email.trim()) return "Email is required.";
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return "Please enter a valid email address.";
-    if (password.length < 6) return "Password must be at least 6 characters.";
-    return null;
+  function validate(): FieldErrors {
+    const next: FieldErrors = {};
+    if (!email.trim()) next.email = "Email is required.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+      next.email = "Please enter a valid email address.";
+    if (password.length < 6)
+      next.password = "Password must be at least 6 characters.";
+    return next;
   }
 
-  async function handleLogin() {
+  async function handleLogin(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     if (loading) return;
-    const validationError = validate();
-    if (validationError) {
-      showToast(validationError, "error");
-      return;
-    }
+    const validationErrors = validate();
+    setErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) return;
     setLoading(true);
 
     let redirecting = false;
@@ -148,7 +153,7 @@ export default function LoginForm() {
         </p>
         <a
           href={redirectUrl}
-          className="inline-block w-full py-2 px-4 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors"
+          className="inline-block w-full py-2 px-4 bg-[#c8ff00] text-black rounded-lg font-semibold hover:bg-[#d4ff33] transition-colors"
         >
           Go to Dashboard →
         </a>
@@ -161,31 +166,52 @@ export default function LoginForm() {
       <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome back</h1>
       <p className="text-gray-500 mb-6">Sign in to your account</p>
 
-      <div className="space-y-4 text-gray-900">
+      <form onSubmit={handleLogin} noValidate className="space-y-4 text-gray-900">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="login-email"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
             Email
           </label>
           <input
+            id="login-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+            autoComplete="email"
+            aria-invalid={errors.email ? true : undefined}
+            aria-describedby={errors.email ? "login-email-error" : undefined}
+            className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent ${errors.email ? "border-red-400" : "border-gray-300"}`}
             placeholder="you@example.com"
           />
+          {errors.email && (
+            <p id="login-email-error" className="mt-1 text-xs text-red-600">
+              {errors.email}
+            </p>
+          )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label
+            htmlFor="login-password"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
             Password
           </label>
-          <input
-            type="password"
+          <PasswordInput
+            id="login-password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
-            placeholder="••••••••"
+            onChange={setPassword}
+            autoComplete="current-password"
+            invalid={Boolean(errors.password)}
+            describedBy={errors.password ? "login-password-error" : undefined}
           />
+          {errors.password && (
+            <p id="login-password-error" className="mt-1 text-xs text-red-600">
+              {errors.password}
+            </p>
+          )}
           <div className="mt-1 text-right">
             <Link
               href="/forgot-password"
@@ -197,13 +223,13 @@ export default function LoginForm() {
         </div>
 
         <button
-          onClick={handleLogin}
+          type="submit"
           disabled={loading}
-          className="w-full py-2 px-4 bg-black text-white rounded-lg font-medium hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full py-2 px-4 bg-[#c8ff00] text-black rounded-lg font-semibold hover:bg-[#d4ff33] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? "Signing in..." : "Sign in"}
         </button>
-      </div>
+      </form>
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Don&apos;t have an account?{" "}

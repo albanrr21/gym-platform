@@ -5,6 +5,10 @@ import AIReportClient from "./AIReportClient";
 import { Suspense } from "react";
 import AIReportSkeleton from "./AIReportSkeleton";
 
+export const metadata = {
+  title: "AI Report",
+};
+
 export default async function AIReportPage() {
   const supabase = await createClient();
   const {

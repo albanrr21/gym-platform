@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { fetchJson } from "@/lib/http/fetchJson";
 import AnalyticsSkeleton from "./AnalyticsSkeleton";
+import { useThemeColor } from "@/lib/theme/useThemeColor";
 import {
   Bar,
   BarChart,
@@ -28,16 +30,23 @@ interface AnalyticsData {
 export default function AnalyticsDashboard() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const brandColor = useThemeColor("--theme-brand", "#111827");
+
+  const loadAnalytics = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await fetchJson<AnalyticsData>("/api/analytics");
+      setData(d);
+    } catch {
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetch("/api/analytics")
-      .then((r) => r.json())
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, []);
+    void loadAnalytics();
+  }, [loadAnalytics]);
 
   if (loading) {
     return <AnalyticsSkeleton />;
@@ -45,8 +54,16 @@ export default function AnalyticsDashboard() {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500 text-sm">Failed to load analytics.</p>
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <p className="text-sm text-gray-600">
+          Couldn&apos;t load your analytics.
+        </p>
+        <button
+          onClick={() => void loadAnalytics()}
+          className="mt-3 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          Try again
+        </button>
       </div>
     );
   }
@@ -57,18 +74,18 @@ export default function AnalyticsDashboard() {
     <div className="mx-auto max-w-2xl space-y-4 px-4 py-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="mb-1 text-xs text-gray-400">Total Workouts</p>
+          <p className="mb-1 text-xs text-gray-500">Total Workouts</p>
           <p className="text-3xl font-bold text-gray-900">
             {data.totalWorkouts}
           </p>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-4">
-          <p className="mb-1 text-xs text-gray-400">Total Volume</p>
+          <p className="mb-1 text-xs text-gray-500">Total Volume</p>
           <p className="text-3xl font-bold text-gray-900">
             {data.totalVolume >= 1000
               ? `${(data.totalVolume / 1000).toFixed(1)}k`
               : data.totalVolume}
-            <span className="ml-1 text-sm font-normal text-gray-400">kg</span>
+            <span className="ml-1 text-sm font-normal text-gray-500">kg</span>
           </p>
         </div>
       </div>
@@ -78,7 +95,7 @@ export default function AnalyticsDashboard() {
           Workouts per week
         </h2>
         {data.weeksData.every((w) => w.count === 0) ? (
-          <p className="py-4 text-center text-sm text-gray-400">
+          <p className="py-4 text-center text-sm text-gray-500">
             No workout data yet.
           </p>
         ) : (
@@ -101,7 +118,7 @@ export default function AnalyticsDashboard() {
                     borderRadius: "0.75rem",
                   }}
                 />
-                <Bar dataKey="count" fill="#111827" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" fill={brandColor} radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -113,7 +130,7 @@ export default function AnalyticsDashboard() {
           <h2 className="mb-1 text-sm font-semibold text-gray-900">
             Strength trend
           </h2>
-          <p className="mb-4 text-xs text-gray-400 capitalize">
+          <p className="mb-4 text-xs text-gray-500 capitalize">
             {data.topExerciseName} - best set per session
           </p>
           <div className="h-56 w-full">
@@ -135,7 +152,7 @@ export default function AnalyticsDashboard() {
                 <Line
                   type="monotone"
                   dataKey="weight"
-                  stroke="#111827"
+                  stroke={brandColor}
                   strokeWidth={2}
                   dot={{ r: 3 }}
                   activeDot={{ r: 5 }}
@@ -158,13 +175,13 @@ export default function AnalyticsDashboard() {
                   <span className="max-w-[70%] truncate text-xs capitalize text-gray-700">
                     {ex.name}
                   </span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-500">
                     {ex.volume.toLocaleString()} kg
                   </span>
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
                   <div
-                    className="h-full rounded-full bg-black"
+                    className="h-full rounded-full bg-[var(--theme-brand)]"
                     style={{ width: `${(ex.volume / maxVolume) * 100}%` }}
                   />
                 </div>
@@ -199,7 +216,7 @@ export default function AnalyticsDashboard() {
 
       {data.totalWorkouts === 0 && (
         <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center">
-          <p className="mb-3 text-sm text-gray-400">No workout data yet.</p>
+          <p className="mb-3 text-sm text-gray-500">No workout data yet.</p>
           <Link
             href="/dashboard/log"
             className="text-sm font-medium text-black hover:underline"
